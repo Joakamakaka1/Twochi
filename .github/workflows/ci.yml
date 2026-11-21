@@ -33,6 +33,7 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
       infra: ${{ steps.filter.outputs.infra }}
       workflows: ${{ steps.filter.outputs.workflows }}
+      plan: ${{ steps.filter.outputs.plan }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -70,6 +71,8 @@ jobs:
           flag '^(apps/web/|apps/api/|packages/api-client/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$)' web
           flag '^infra/' infra
           flag '^\.github/' workflows
+          # What the stack plan reads: the Terraform code and what goes into a Lambda zip.
+          flag '^(infra/|apps/(api|worker)/|packages/|uv\.lock$|\.python-version$|\.github/scripts/(lambda_package|plan_check)\.py$)' plan
 
   python:
     needs: changes
@@ -147,6 +150,127 @@ jobs:
           # Enables zizmor's online audits (impostor commits, known-vulnerable actions).
           GH_TOKEN: ${{ github.token }}
 
+  # terraform plan of the stack with the read-only role (CI/CD e IaC, «Plan y apply»).
+  # Dependabot and fork PRs get no secrets: the job then passes with a warning, as it
+  # does until bootstrap is applied and its outputs are in GitHub (TWO-9).
+  plan:
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.plan == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      summary: ${{ steps.check.outputs.summary }}
+    steps:
+      - id: ready
+        env:
+          ROLE_ARN: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+        run: |
+          if [ -n "$ROLE_ARN" ] && [ -n "$STATE_BUCKET" ] && [ -n "$SUPABASE_URL" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=plan skipped::AWS_PLAN_ROLE_ARN, TF_STATE_BUCKET or the SUPABASE_URL variable is missing (bootstrap not applied yet, or a PR without secrets)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.ready.outputs.ok == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - if: steps.ready.outputs.ok == 'true'
+        uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: python uv terraform
+      # The guard comes from the base branch, so editing it does not change this run's
+      # verdict by accident. It is no barrier against the PR's author, who controls this
+      # workflow too: the deploy on main runs the guard already in prod, and review is
+      # the control. Only when the base has no guard yet does the PR's copy run.
+      - if: steps.ready.outputs.ok == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git cat-file -e "$BASE_SHA:.github/scripts/plan_check.py" 2>/dev/null; then
+            git show "$BASE_SHA:.github/scripts/plan_check.py" > "$RUNNER_TEMP/plan_check.py"
+          else
+            cp .github/scripts/plan_check.py "$RUNNER_TEMP/plan_check.py"
+          fi
+      - if: steps.ready.outputs.ok == 'true'
+        id: key
+        run: echo "api=$(python .github/scripts/lambda_package.py key api)" >> "$GITHUB_OUTPUT"
+      - if: steps.ready.outputs.ok == 'true'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          role-session-name: twochi-plan-${{ github.run_id }}
+          aws-region: eu-west-1
+          mask-aws-account-id: true
+      # The PR's plan is for reading and never applied: main computes a fresh one.
+      - if: steps.ready.outputs.ok == 'true'
+        working-directory: infra/stack
+        env:
+          STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_api_package_key: ${{ steps.key.outputs.api }}
+          TF_VAR_supabase_url: ${{ vars.SUPABASE_URL }}
+        run: |
+          terraform init -input=false -lockfile=readonly -backend-config="bucket=$STATE_BUCKET"
+          terraform plan -input=false -lock=false -out="$RUNNER_TEMP/stack.tfplan"
+          terraform show -json "$RUNNER_TEMP/stack.tfplan" > "$RUNNER_TEMP/plan.json"
+      # Also after a failed plan, so the PR comment never keeps an older green summary.
+      - if: always() && steps.ready.outputs.ok == 'true'
+        id: check
+        run: |
+          status=0
+          if [ -s "$RUNNER_TEMP/plan.json" ]; then
+            python "$RUNNER_TEMP/plan_check.py" "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/summary.md" || status=$?
+          else
+            cat > "$RUNNER_TEMP/summary.md" <<'SUMMARY'
+          ### `terraform plan` · infra/stack
+
+          ❌ The plan did not finish: see the run log.
+          SUMMARY
+            status=1
+          fi
+          cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "summary<<TWOCHI_PLAN_SUMMARY"
+            cat "$RUNNER_TEMP/summary.md"
+            echo "TWOCHI_PLAN_SUMMARY"
+          } >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+  # Posts the plan summary on the PR. Apart from `plan`, so the job with the AWS role
+  # cannot write to the repository and this one runs no code from the PR.
+  plan-comment:
+    needs: plan
+    if: always() && needs.plan.outputs.summary != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SUMMARY: ${{ needs.plan.outputs.summary }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # One comment per PR, found by its marker and edited on every run.
+        run: |
+          marker='<!-- twochi-plan -->'
+          printf '%s\n%s\n\n[Full plan in the run log](%s)\n' "$marker" "$SUMMARY" "$RUN_URL" > "$RUNNER_TEMP/comment.md"
+          id=$(gh api --paginate "repos/$GH_REPO/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | tail -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GH_REPO/issues/comments/$id" -F "body=@$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh api --method POST "repos/$GH_REPO/issues/$PR/comments" -F "body=@$RUNNER_TEMP/comment.md" > /dev/null
+          fi
+
   flujo:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
@@ -178,7 +302,8 @@ jobs:
 
   ci-ok:
     if: always()
-    needs: [changes, python, web, infra, workflows, flujo]
+    # plan-comment stays out: a comment that fails to post blocks nothing.
+    needs: [changes, python, web, infra, workflows, plan, flujo]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

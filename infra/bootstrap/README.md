@@ -52,7 +52,7 @@ Con tu usuario de administración, en otra terminal, fuera del alcance de la IA:
 ## Después del apply
 
 - En Cloudflare, los registros `NS` de `twochi` con los valores de `terraform output zone_name_servers` (TWO-14).
-- En GitHub, como secretos, para que los logs públicos los enmascaren (llevan el ID de la cuenta): `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET` y `TF_ARTIFACTS_BUCKET` en el repositorio, y `AWS_APPLY_ROLE_ARN` en el entorno `prod`.
+- En GitHub, como secretos, para que los logs públicos los enmascaren (llevan el ID de la cuenta): `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET` y `TF_ARTIFACTS_BUCKET` en el repositorio, y `AWS_APPLY_ROLE_ARN` en el entorno `prod`. Con ellos y la variable `SUPABASE_URL` (ver `infra/stack`), el `plan` de los PR y el despliegue en `main` dejan de saltarse.
 
 ## Cambios posteriores
 

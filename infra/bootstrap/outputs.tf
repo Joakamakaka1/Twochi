@@ -19,12 +19,12 @@ output "dataset_bucket" {
 }
 
 output "plan_role_arn" {
-  description = "Role the PR plan job assumes. Goes to the repository variable AWS_PLAN_ROLE_ARN."
+  description = "Role the PR plan job assumes. Goes to the repository secret AWS_PLAN_ROLE_ARN (ADR 0003)."
   value       = aws_iam_role.plan.arn
 }
 
 output "apply_role_arn" {
-  description = "Role the prod apply job assumes. Goes to the prod environment variable AWS_APPLY_ROLE_ARN."
+  description = "Role the prod apply job assumes. Goes to the prod environment secret AWS_APPLY_ROLE_ARN (ADR 0003)."
   value       = aws_iam_role.apply.arn
 }
 

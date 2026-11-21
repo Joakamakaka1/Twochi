@@ -45,6 +45,10 @@ check-infra:
     for dir in infra/bootstrap infra/stack; do [ -f "$dir/versions.tf" ] || continue; terraform -chdir="$dir" init -backend=false -input=false -lockfile=readonly > /dev/null; terraform -chdir="$dir" validate; done
     if [ -d infra ]; then cd infra && tflint --init && tflint --recursive; fi
 
+# Build a Lambda zip for arm64 into dist/, named by the hash of its inputs, as CI does.
+package app="api":
+    uv run --locked python .github/scripts/lambda_package.py build {{app}} dist
+
 # Format and autofix.
 fmt:
     uv run --locked ruff format .
