@@ -228,7 +228,11 @@ jobs:
           if [ -s "$RUNNER_TEMP/plan.json" ]; then
             python "$RUNNER_TEMP/plan_check.py" "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/summary.md" || status=$?
           else
-            printf '### `terraform plan` · infra/stack\n\n❌ The plan did not finish: see the run log.\n' > "$RUNNER_TEMP/summary.md"
+            cat > "$RUNNER_TEMP/summary.md" <<'SUMMARY'
+          ### `terraform plan` · infra/stack
+
+          ❌ The plan did not finish: see the run log.
+          SUMMARY
             status=1
           fi
           cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
