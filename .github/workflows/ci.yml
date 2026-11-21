@@ -141,7 +141,7 @@ jobs:
       - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
           version: ${{ env.MISE_VERSION }}
-          install_args: python uv actionlint pipx:zizmor just
+          install_args: python uv actionlint shellcheck pipx:zizmor just
       - run: just check-workflows
         env:
           # Enables zizmor's online audits (impostor commits, known-vulnerable actions).

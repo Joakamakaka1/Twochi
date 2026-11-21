@@ -35,8 +35,10 @@ check-web:
     pnpm -r --if-present run test
 
 # Workflows: actionlint and zizmor (online audits only when GH_TOKEN is set).
+# actionlint silently skips its shellcheck pass when it finds no shellcheck, so it gets
+# the pinned one by path; `mise which` fails when that version is not installed.
 check-workflows:
-    actionlint
+    shellcheck="$(mise which shellcheck)" && actionlint -shellcheck "$shellcheck"
     zizmor .
 
 # Terraform: format, validate each root (modules through them) without a backend, and tflint.
