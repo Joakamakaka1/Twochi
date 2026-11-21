@@ -133,6 +133,16 @@ data "aws_cloudfront_origin_request_policy" "all_viewer_except_host" {
   name = "Managed-AllViewerExceptHostHeader"
 }
 
+# Deep links: front routes get index.html, files pass unchanged. Only on the default
+# behavior, so /api/* keeps its own errors. Free plan: no KeyValueStore, no network calls.
+resource "aws_cloudfront_function" "web_routes" {
+  name    = "twochi-web-routes"
+  runtime = "cloudfront-js-2.0"
+  comment = "Front routes without an extension get index.html."
+  publish = true
+  code    = file("${path.module}/functions/web_routes.js")
+}
+
 locals {
   # The Function URL is https://<id>.lambda-url.<region>.on.aws/; CloudFront wants the host.
   api_origin_host = trimsuffix(trimprefix(aws_lambda_function_url.api.function_url, "https://"), "/")
@@ -176,6 +186,11 @@ resource "aws_cloudfront_distribution" "edge" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
     cache_policy_id        = data.aws_cloudfront_cache_policy.optimized.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.web_routes.arn
+    }
   }
 
   ordered_cache_behavior {
