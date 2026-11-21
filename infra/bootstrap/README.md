@@ -6,6 +6,7 @@ Lo que debe existir antes de que corra el pipeline: el bucket de estado, la zona
 | --- | --- |
 | `twochi-tfstate-<cuenta>` | Estado de `bootstrap` y del stack: privado, versionado, cifrado, solo por TLS y con bloqueo nativo de S3. `prevent_destroy` |
 | `twochi.jcvstro.dev` en Route 53 | Zona del dominio, delegada desde Cloudflare. `prevent_destroy`. Ver [ADR 0002](../../docs/adr/0002-route53-subzone-delegated-from-cloudflare.md) |
+| `twochi-artifacts-<cuenta>` | Zips de las Lambdas, con nombre por hash. Existe antes del stack porque el zip se sube antes del `apply` |
 | Proveedor OIDC | GitHub Actions entra sin claves de AWS |
 | `twochi-plan` | `ReadOnlyAccess` para `terraform plan` en los PR. Confía en `pull_request` del `sub` inmutable del repositorio |
 | `twochi-apply` | Escribe el stack, solo desde el entorno `prod`. Nombres `twochi-*`, roles con el límite obligatorio y sin alcance sobre `bootstrap` |
