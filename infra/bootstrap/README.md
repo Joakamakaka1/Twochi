@@ -26,7 +26,7 @@ Los cuatro buckets usan el módulo `infra/modules/private_bucket`: privados, cif
 
 Los logs de Actions son públicos y un `plan` ejecuta el código del PR, así que lo que estos roles puedan leer puede acabar publicado.
 
-- Los dos: solo leen los servicios del stack, y GuardDuty no está entre ellos; solo `eu-west-1`, `us-east-1` y `eu-north-1`; ningún parámetro de SSM ni secreto, y `kms:Decrypt` solo cuando Lambda descifra el environment de una función `twochi-*`, que nunca lleva secretos ([ADR 0005](../../docs/adr/0005-ci-reads-lambda-environment.md)); ningún objeto fuera de los buckets de estado y de artefactos, y ni siquiera la lista de claves de backups y dataset; ni líneas de log, anomalías, mensajes de SQS ni el informe de credenciales.
+- Los dos: solo leen los servicios del stack, y GuardDuty no está entre ellos; solo `eu-west-1`, `us-east-1` y `eu-north-1`; ni el estado de `bootstrap` ni quién recibe los avisos de seguridad; ningún parámetro de SSM ni secreto, y `kms:Decrypt` solo cuando Lambda descifra el environment de una función `twochi-*`, que nunca lleva secretos ([ADR 0005](../../docs/adr/0005-ci-reads-lambda-environment.md)); ningún objeto fuera de los buckets de estado y de artefactos, y ni siquiera la lista de claves de backups y dataset; ni líneas de log, anomalías, mensajes de SQS ni el informe de credenciales.
 - `twochi-apply`, además:
   - no asume ningún rol ni toca el IAM de `bootstrap`, salvo para leerlo;
   - en los buckets de `bootstrap` solo lee, escribe y borra objetos (nunca en `bootstrap/*` ni en los de datos) y lista;
@@ -61,6 +61,17 @@ Con tu usuario de administración, en otra terminal, fuera del alcance de la IA:
 
 Un cambio aquí es un PR de zona delicada y otro `plan` y `apply` tuyos, con `-backend-config="bucket=..."` en el `init`.
 
-El `plan` pide `alert_email`, el correo de los avisos de seguridad. Es personal y no entra en git: ponlo en `terraform.tfvars` (ignorado) como `alert_email = "..."` o en `TF_VAR_alert_email`. Tras el primer `apply` con él, AWS envía un correo de confirmación: hasta que lo aceptes, no llega ningún aviso. Para comprobar el camino entero, crea hallazgos de muestra con `aws guardduty create-sample-findings` en `eu-west-1` y en otra región.
+El `plan` pide `alert_email`, el correo de los avisos de seguridad. Es personal y no entra en git: ponlo en `terraform.tfvars` (ignorado) como `alert_email = "..."` o en `TF_VAR_alert_email`. Tras el primer `apply` con él, AWS envía un correo de confirmación: hasta que lo confirmes, no llega ningún aviso.
+
+No pulses el enlace del correo. Una suscripción confirmada así se puede dar de baja sin credenciales, con solo su ARN, y el `Deny` de `twochi-apply` no lo impide. Confírmala con tu admin, pasando el `Token` que va en la URL del enlace:
+
+```sh
+aws sns confirm-subscription --region eu-west-1 --topic-arn <ARN de twochi-security-alerts> --token <token> --authenticate-on-unsubscribe true
+aws sns get-subscription-attributes --region eu-west-1 --subscription-arn <ARN devuelto>   # ConfirmationWasAuthenticated = true
+```
+
+Si algo confirma antes por el enlace, como un escáner de correo, borra la suscripción y vuelve a aplicar.
+
+Para comprobar el camino entero, crea hallazgos de muestra con `aws guardduty create-sample-findings` en `eu-west-1`, en otra región por defecto y en `eu-south-2`, que es opt-in. Si no llega un correo, mira `FailedInvocations` de la regla de reenvío de esa región y de la central. Los hallazgos de Access Analyzer que ya estaban activos antes del `apply` no generan evento: revísalos una vez en la consola.
 
 Los permisos de `twochi-apply` van por servicio: el primer `apply` del stack dirá qué falta. Se añade en su propio PR, acotado a la cuenta y a `twochi-*`, nunca con `*` como recurso salvo las acciones que no admiten otro.

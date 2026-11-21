@@ -125,6 +125,42 @@ data "aws_iam_policy_document" "ci_guardrails" {
     ]
   }
 
+  # Bootstrap's state holds the alerts email in plain text, and the stack never reads it.
+  statement {
+    sid    = "DenyBootstrapState"
+    effect = "Deny"
+    actions = [
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:GetObjectAttributes",
+      "s3:GetObjectTorrent",
+    ]
+    resources = ["arn:aws:s3:::${local.state_bucket}/bootstrap/*"]
+  }
+
+  # Who receives the security alerts, and the subscription ARN that would let anyone
+  # unsubscribe an unauthenticated subscription, stay out of public logs.
+  statement {
+    sid    = "DenyAlertSubscribers"
+    effect = "Deny"
+    actions = [
+      "sns:ListSubscriptionsByTopic",
+      "sns:GetSubscriptionAttributes",
+    ]
+    resources = [
+      local.security_alerts_topic_arn,
+      "${local.security_alerts_topic_arn}:*",
+    ]
+  }
+
+  # ListSubscriptions has no resource to scope; the stack's Terraform never calls it.
+  statement {
+    sid       = "DenyListingSubscriptions"
+    effect    = "Deny"
+    actions   = ["sns:ListSubscriptions"]
+    resources = ["*"]
+  }
+
   # Log lines and queue messages may carry payloads; Terraform never reads them.
   statement {
     sid    = "DenyPayloads"

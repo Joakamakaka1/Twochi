@@ -16,18 +16,32 @@ locals {
   forward_regions   = setsubtract(local.detection_regions, [local.home_region])
   home_bus_arn      = "arn:aws:events:${local.home_region}:${local.account_id}:event-bus/default"
 
-  guardduty_forward_rule = "twochi-guardduty-forward"
+  # Built from names, not resource attributes, so that the IAM policies that protect
+  # them (role_apply.tf, github_oidc.tf) show a readable diff in the plan.
+  guardduty_forward_rule    = "twochi-guardduty-forward"
+  security_alerts_topic     = "twochi-security-alerts"
+  security_alerts_topic_arn = "arn:aws:sns:${local.home_region}:${local.account_id}:${local.security_alerts_topic}"
+  central_rules = {
+    guardduty       = "twochi-guardduty-findings"
+    access_analyzer = "twochi-access-analyzer-findings"
+  }
+  central_rule_arns = [
+    for name in values(local.central_rules) : "arn:aws:events:${local.home_region}:${local.account_id}:rule/${name}"
+  ]
 
   # What GuardDuty looks at here (AWS, «GuardDuty»): management events, S3 data events
   # and the Lambdas' network activity. The rest has nothing to watch in this account and
-  # is switched off so that the configuration says what runs. A new detector turns every
-  # optional plan on except Runtime Monitoring, so each one is declared.
+  # is switched off so that the configuration says what runs. A new detector turns these
+  # optional plans on except Runtime Monitoring, so each one is declared, with the
+  # additional configurations the API returns for it (otherwise every plan shows a diff).
+  # AI Protection is opt-in and EKS Runtime Monitoring cannot be set together with
+  # Runtime Monitoring, so both are left out.
   guardduty_features = {
     S3_DATA_EVENTS         = { status = "ENABLED", additional = [] }
     LAMBDA_NETWORK_LOGS    = { status = "ENABLED", additional = [] }
     EKS_AUDIT_LOGS         = { status = "DISABLED", additional = [] }
     EBS_MALWARE_PROTECTION = { status = "DISABLED", additional = [] }
-    RDS_LOGIN_EVENTS       = { status = "DISABLED", additional = [] }
+    RDS_LOGIN_EVENTS       = { status = "DISABLED", additional = ["RDS_DATA_RISK"] }
     RUNTIME_MONITORING = {
       status     = "DISABLED"
       additional = ["EKS_ADDON_MANAGEMENT", "ECS_FARGATE_AGENT_MANAGEMENT", "EC2_AGENT_MANAGEMENT"]
@@ -70,7 +84,7 @@ resource "aws_guardduty_detector_feature" "this" {
 # for SNS does not let EventBridge publish, and a customer key would cost more than the
 # rest of this file to protect what ends up in a plain email anyway.
 resource "aws_sns_topic" "security_alerts" {
-  name = "twochi-security-alerts"
+  name = local.security_alerts_topic
 }
 
 resource "aws_sns_topic_subscription" "security_alerts_email" {
@@ -101,13 +115,14 @@ data "aws_iam_policy_document" "security_alerts_topic" {
       ]
     }
 
-    condition {
-      test     = "StringEquals"
-      variable = "aws:SourceAccount"
-      values   = [local.account_id]
-    }
+    # No aws:SourceAccount: the rule ARNs already name the account, and EventBridge's
+    # documented topic policies only use aws:SourceArn.
   }
 }
+
+# The email subscription is the one link nothing in IAM protects: a subscription
+# confirmed through the email link can be removed by anyone holding its ARN. It must be
+# confirmed with authenticate-on-unsubscribe (README, «Cambios posteriores»).
 
 resource "aws_sns_topic_policy" "security_alerts" {
   arn    = aws_sns_topic.security_alerts.arn
@@ -117,7 +132,7 @@ resource "aws_sns_topic_policy" "security_alerts" {
 # Every severity: root credential use, the finding that matters most here, is Low.
 # Forwarded events keep their source and region, so this rule sees every region's.
 resource "aws_cloudwatch_event_rule" "guardduty_findings" {
-  name        = "twochi-guardduty-findings"
+  name        = local.central_rules.guardduty
   description = "GuardDuty findings from every region to the security alerts topic."
   event_pattern = jsonencode({
     source        = ["aws.guardduty"]
@@ -134,7 +149,7 @@ resource "aws_cloudwatch_event_target" "guardduty_findings" {
 # The analyzer lives in eu-west-1 and also covers the global IAM roles. Only active
 # findings: a resolved or archived one needs no email.
 resource "aws_cloudwatch_event_rule" "access_analyzer_findings" {
-  name        = "twochi-access-analyzer-findings"
+  name        = local.central_rules.access_analyzer
   description = "Active Access Analyzer findings to the security alerts topic."
   event_pattern = jsonencode({
     source        = ["aws.access-analyzer"]

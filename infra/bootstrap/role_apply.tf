@@ -21,18 +21,19 @@ locals {
     "arn:aws:iam::${local.acct}:role/twochi-apply",
     aws_iam_openid_connect_provider.github.arn,
     aws_iam_policy.workload_boundary.arn,
-    aws_iam_role.findings_forwarder.arn,
+    "arn:aws:iam::${local.acct}:role/twochi-findings-forwarder",
   ]
 
   # The detection alerts (detection.tf) carry the twochi- prefix, which the stack's
   # SNS, EventBridge and IAM permissions match.
-  detection_alert_arns = [
-    aws_sns_topic.security_alerts.arn,
-    "${aws_sns_topic.security_alerts.arn}:*",
-    aws_cloudwatch_event_rule.guardduty_findings.arn,
-    aws_cloudwatch_event_rule.access_analyzer_findings.arn,
-    "arn:aws:events:*:${local.acct}:rule/${local.guardduty_forward_rule}",
-  ]
+  detection_alert_arns = concat(
+    [
+      local.security_alerts_topic_arn,
+      "${local.security_alerts_topic_arn}:*",
+      "arn:aws:events:*:${local.acct}:rule/${local.guardduty_forward_rule}",
+    ],
+    local.central_rule_arns,
+  )
 
   bootstrap_bucket_arns = [for name in local.bootstrap_buckets : "arn:aws:s3:::${name}"]
 }

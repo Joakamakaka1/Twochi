@@ -13,12 +13,13 @@ El documento activa GuardDuty en todas las regiones desde `infra/stack` y manda 
 
 ## Decisión
 
-- `infra/bootstrap/detection.tf` crea un detector de GuardDuty en cada región habilitada (data source `aws_regions`; hoy son 18, `eu-south-2` incluida). Solo quedan activos los planes que tienen algo que mirar aquí: S3 y la red de las Lambdas. EKS, Malware Protection para EC2, RDS y Runtime Monitoring se declaran desactivados.
+- `infra/bootstrap/detection.tf` crea un detector de GuardDuty en cada región habilitada (data source `aws_regions`; hoy son 18, `eu-south-2` incluida). Solo quedan activos los planes que tienen algo que mirar aquí: S3 y la red de las Lambdas. EKS, Malware Protection para EC2, RDS y Runtime Monitoring se declaran desactivados. AI Protection, que AWS deja desactivado por defecto, no se gestiona; se comprueba tras el `apply`.
 - Los hallazgos de cada región pasan a la región central por EventBridge: una regla `twochi-guardduty-forward` en cada región los envía al bus `default` de `eu-west-1`, con el rol `twochi-findings-forwarder`. EventBridge solo admite buses de eventos como destino en otra región, así que el tema no puede ser el destino directo.
 - En `eu-west-1`, dos reglas centrales publican en el tema `twochi-security-alerts`. La primera recoge los hallazgos de GuardDuty de todas las gravedades, porque el uso de las credenciales de root es de gravedad baja. La segunda recoge los hallazgos activos de Access Analyzer. El tema envía el evento completo, sin transformar, a un correo que se pasa en la variable `alert_email` y nunca entra en git.
 - El tema solo acepta publicaciones de esas dos reglas. No lleva clave propia: la gestionada `aws/sns` no deja publicar a EventBridge, y una clave propia costaría más que todo lo demás para proteger algo que acaba en un correo en claro.
 - `twochi-apply` tiene permisos sobre los temas, reglas y roles `twochi-*`. Por eso un `Deny` le impide tocar este tema, su suscripción y estas reglas, salvo para leerlos, y el rol de reenvío entra en la lista de IAM protegida de `bootstrap`.
-- Los roles de CI dejan de leer GuardDuty, y el filtro de regiones ya no tiene excepciones.
+- Los roles de CI dejan de leer GuardDuty, y el filtro de regiones ya no tiene excepciones. Tampoco leen el estado de `bootstrap`, que guarda el correo en claro, ni las suscripciones del tema.
+- La suscripción de correo se confirma con `--authenticate-on-unsubscribe true` desde la CLI, no con el enlace: confirmada por el enlace, cualquiera con su ARN podría darla de baja sin credenciales, y ningún permiso de IAM lo impide.
 - Este tema es solo para la detección. Las alarmas de CloudWatch del stack tendrán un tema propio en el stack.
 
 ## Consecuencias
