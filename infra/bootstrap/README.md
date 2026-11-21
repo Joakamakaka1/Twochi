@@ -23,7 +23,7 @@ Los cuatro buckets usan el módulo `infra/modules/private_bucket`: privados, cif
 
 Los logs de Actions son públicos y un `plan` ejecuta el código del PR, así que lo que estos roles puedan leer puede acabar publicado.
 
-- Los dos: solo leen los servicios del stack; solo `eu-west-1`, `us-east-1` y `eu-north-1` (GuardDuty, en todas); ningún parámetro de SSM, secreto ni `kms:Decrypt`; ningún objeto fuera de los buckets de estado y de artefactos, y ni siquiera la lista de claves de backups y dataset; ni líneas de log, anomalías, mensajes de SQS ni el informe de credenciales.
+- Los dos: solo leen los servicios del stack; solo `eu-west-1`, `us-east-1` y `eu-north-1` (GuardDuty, en todas); ningún parámetro de SSM ni secreto, y `kms:Decrypt` solo cuando Lambda descifra el environment de una función `twochi-*`, que nunca lleva secretos ([ADR 0005](../../docs/adr/0005-ci-reads-lambda-environment.md)); ningún objeto fuera de los buckets de estado y de artefactos, y ni siquiera la lista de claves de backups y dataset; ni líneas de log, anomalías, mensajes de SQS ni el informe de credenciales.
 - `twochi-apply`, además:
   - no asume ningún rol ni toca el IAM de `bootstrap`, salvo para leerlo;
   - en los buckets de `bootstrap` solo lee, escribe y borra objetos (nunca en `bootstrap/*` ni en los de datos) y lista;
