@@ -1,11 +1,21 @@
 output "state_bucket" {
   description = "Backend bucket for the stack: -backend-config=\"bucket=...\"."
-  value       = aws_s3_bucket.state.bucket
+  value       = module.state_bucket.id
 }
 
 output "artifacts_bucket" {
   description = "Bucket for the Lambda zips."
-  value       = aws_s3_bucket.artifacts.bucket
+  value       = module.artifacts_bucket.id
+}
+
+output "backups_bucket" {
+  description = "Bucket for the daily database dumps."
+  value       = module.backups_bucket.id
+}
+
+output "dataset_bucket" {
+  description = "Bucket for the golden dataset and style samples."
+  value       = module.dataset_bucket.id
 }
 
 output "plan_role_arn" {

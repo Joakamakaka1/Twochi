@@ -40,9 +40,15 @@ locals {
   # Regions Twochi uses: the stack, CloudFront's certificate and WAF, and Guardrails.
   allowed_regions = ["eu-west-1", "us-east-1", "eu-north-1"]
 
-  # Bucket names are global, so they end with the account id. The stack must use the
-  # same names; they are listed here because the CI roles deny reading their objects.
-  state_bucket   = "twochi-tfstate-${local.account_id}"
-  backups_bucket = "twochi-backups-${local.account_id}"
-  dataset_bucket = "twochi-dataset-${local.account_id}"
+  # Bucket names are global, so they end with the account id. See buckets.tf.
+  state_bucket     = "twochi-tfstate-${local.account_id}"
+  artifacts_bucket = "twochi-artifacts-${local.account_id}"
+  backups_bucket   = "twochi-backups-${local.account_id}"
+  dataset_bucket   = "twochi-dataset-${local.account_id}"
+  bootstrap_buckets = [
+    local.state_bucket,
+    local.artifacts_bucket,
+    local.backups_bucket,
+    local.dataset_bucket,
+  ]
 }

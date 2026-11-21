@@ -46,7 +46,8 @@ data "aws_iam_policy_document" "github_trust" {
 
 # Shared by both CI roles: nothing outside the three regions (GuardDuty runs in all of
 # them), and nothing that reads secrets or real data. A plan runs provider code with
-# whatever the PR brings, so its role must not open anything valuable.
+# whatever the PR brings, and the repository's logs are public, so anything these roles
+# can read may end up published.
 data "aws_iam_policy_document" "ci_guardrails" {
   statement {
     sid         = "DenyOtherRegions"
@@ -61,6 +62,8 @@ data "aws_iam_policy_document" "ci_guardrails" {
     }
   }
 
+  # Terraform manages no parameters (ADR 0003), so CI never needs to read one. Path
+  # reads are evaluated against the path, hence every resource.
   statement {
     sid    = "DenySecretValues"
     effect = "Deny"
@@ -69,26 +72,43 @@ data "aws_iam_policy_document" "ci_guardrails" {
       "ssm:GetParameters",
       "ssm:GetParametersByPath",
       "ssm:GetParameterHistory",
+      "secretsmanager:GetSecretValue",
+      "kms:Decrypt",
     ]
-    resources = ["arn:aws:ssm:*:${local.account_id}:parameter/twochi/*"]
-  }
-
-  statement {
-    sid       = "DenyDecrypt"
-    effect    = "Deny"
-    actions   = ["kms:Decrypt"]
     resources = ["*"]
   }
 
-  # With S3's default encryption, denying kms:Decrypt is not enough (AWS, «Conexiones
-  # y permisos»): reading the objects is denied explicitly.
+  # Objects are readable only in the state bucket (a plan needs it) and the artifacts
+  # bucket (Lambda deploys need it). Any other bucket, today or tomorrow, stays closed.
   statement {
-    sid     = "DenyRealData"
-    effect  = "Deny"
-    actions = ["s3:GetObject", "s3:GetObjectVersion"]
-    resources = [
-      "arn:aws:s3:::${local.backups_bucket}/*",
-      "arn:aws:s3:::${local.dataset_bucket}/*",
+    sid    = "DenyObjectsOutsideStateAndArtifacts"
+    effect = "Deny"
+    actions = [
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:GetObjectAttributes",
+      "s3:GetObjectTorrent",
     ]
+    not_resources = [
+      "arn:aws:s3:::${local.state_bucket}/*",
+      "arn:aws:s3:::${local.artifacts_bucket}/*",
+    ]
+  }
+
+  # Log lines and queue messages may carry payloads; Terraform never reads them.
+  statement {
+    sid    = "DenyPayloads"
+    effect = "Deny"
+    actions = [
+      "logs:GetLogEvents",
+      "logs:FilterLogEvents",
+      "logs:GetLogRecord",
+      "logs:GetQueryResults",
+      "logs:StartQuery",
+      "logs:StartLiveTail",
+      "logs:Unmask",
+      "sqs:ReceiveMessage",
+    ]
+    resources = ["*"]
   }
 }

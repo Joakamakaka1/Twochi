@@ -1,6 +1,11 @@
 # twochi-apply: writes the stack, only from jobs in the `prod` environment, which waits
-# for a person's approval. Writes are scoped to this account and to `twochi-*` names;
-# roles it creates must carry the workload boundary; bootstrap itself is out of reach.
+# for a person's approval and only runs from `main`. Writes are scoped to this account
+# and to `twochi-*` names; roles it creates must carry the workload boundary; bootstrap,
+# its buckets and their data are out of reach.
+#
+# The real control is that approval: whoever can apply can change what runs in prod.
+# These denies keep a merged PR from reaching secrets, real data or bootstrap, or from
+# opening the account to the outside, in a single apply.
 #
 # Actions are by service and the first stack apply will show what is missing: add it
 # here, in its own PR, never as a wildcard on every resource.
@@ -14,6 +19,8 @@ locals {
     aws_iam_openid_connect_provider.github.arn,
     aws_iam_policy.workload_boundary.arn,
   ]
+
+  bootstrap_bucket_arns = [for name in local.bootstrap_buckets : "arn:aws:s3:::${name}"]
 }
 
 data "aws_iam_policy_document" "apply_stack" {
@@ -43,6 +50,7 @@ data "aws_iam_policy_document" "apply_stack" {
       "arn:aws:cloudwatch:eu-west-1:${local.acct}:alarm:twochi-*",
       "arn:aws:sns:eu-west-1:${local.acct}:twochi-*",
       "arn:aws:events:*:${local.acct}:rule/twochi-*",
+      # The account holds only Twochi, so CloudFront, WAF and ACM are scoped to it.
       "arn:aws:cloudfront::${local.acct}:*",
       "arn:aws:wafv2:us-east-1:${local.acct}:global/*",
       "arn:aws:acm:us-east-1:${local.acct}:certificate/*",
@@ -56,13 +64,20 @@ data "aws_iam_policy_document" "apply_stack" {
     resources = ["arn:aws:s3:::twochi-*", "arn:aws:s3:::twochi-*/*"]
   }
 
+  statement {
+    sid       = "GuardDuty"
+    actions   = ["guardduty:*"]
+    resources = ["arn:aws:guardduty:*:${local.acct}:detector/*"]
+  }
+
   # Actions without resource-level permissions: these only work on "*".
   statement {
     sid = "CreateWithoutResource"
     actions = [
       "acm:RequestCertificate",
       "lambda:CreateEventSourceMapping",
-      "guardduty:*",
+      "guardduty:CreateDetector",
+      "guardduty:ListDetectors",
       "route53:GetChange",
     ]
     resources = ["*"]
@@ -133,12 +148,18 @@ data "aws_iam_policy_document" "apply_stack" {
   }
 
   statement {
-    sid    = "ProtectBootstrap"
-    effect = "Deny"
-    actions = [
-      "iam:*",
-    ]
+    sid       = "ProtectBootstrap"
+    effect    = "Deny"
+    actions   = ["iam:*"]
     resources = local.bootstrap_iam_arns
+  }
+
+  # A workload role that trusts twochi-apply would let it step around every deny here.
+  statement {
+    sid       = "NeverBecomeAWorkload"
+    effect    = "Deny"
+    actions   = ["sts:AssumeRole", "sts:TagSession", "sts:SetSourceIdentity"]
+    resources = ["arn:aws:iam::${local.acct}:role/*"]
   }
 
   statement {
@@ -155,18 +176,51 @@ data "aws_iam_policy_document" "apply_stack" {
     ]
   }
 
+  # Bootstrap's buckets keep the configuration bootstrap gives them: no policy, ACL,
+  # ownership, public access, versioning, lifecycle or encryption change, and no purge
+  # of old versions.
   statement {
-    sid    = "ProtectStateAndZone"
+    sid    = "ProtectBootstrapBuckets"
     effect = "Deny"
     actions = [
-      "s3:DeleteBucket",
-      "s3:PutBucketPolicy",
-      "s3:DeleteBucketPolicy",
-      "s3:PutBucketVersioning",
+      "s3:DeleteBucket*",
+      "s3:PutBucket*",
+      "s3:PutEncryptionConfiguration",
       "s3:PutLifecycleConfiguration",
-      "route53:DeleteHostedZone",
+      "s3:PutReplicationConfiguration",
+      "s3:PutObjectAcl",
+      "s3:PutObjectVersionAcl",
+      "s3:DeleteObjectVersion",
     ]
-    resources = [aws_s3_bucket.state.arn, aws_route53_zone.twochi.arn]
+    resources = concat(
+      local.bootstrap_bucket_arns,
+      [for arn in local.bootstrap_bucket_arns : "${arn}/*"],
+    )
+  }
+
+  # The stack writes its own state; bootstrap's state and the data buckets are not its
+  # business.
+  statement {
+    sid     = "ProtectBootstrapObjects"
+    effect  = "Deny"
+    actions = ["s3:PutObject", "s3:DeleteObject"]
+    resources = [
+      "arn:aws:s3:::${local.state_bucket}/bootstrap/*",
+      "arn:aws:s3:::${local.backups_bucket}/*",
+      "arn:aws:s3:::${local.dataset_bucket}/*",
+    ]
+  }
+
+  statement {
+    sid    = "ProtectZoneAndDetection"
+    effect = "Deny"
+    actions = [
+      "route53:DeleteHostedZone",
+      "guardduty:DeleteDetector",
+      "access-analyzer:DeleteAnalyzer",
+      "s3:PutAccountPublicAccessBlock",
+    ]
+    resources = ["*"]
   }
 }
 

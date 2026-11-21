@@ -74,6 +74,15 @@ data "aws_iam_policy_document" "workload_boundary" {
     resources = ["arn:aws:s3:::twochi-*/*"]
   }
 
+  # No workload touches state, artifacts, backups or the dataset: those belong to the
+  # pipeline and to people.
+  statement {
+    sid       = "NotBootstrapBuckets"
+    effect    = "Deny"
+    actions   = ["s3:*"]
+    resources = [for name in local.bootstrap_buckets : "arn:aws:s3:::${name}/*"]
+  }
+
   # The Guardrails API has no resources to scope (AWS, «Conexiones y permisos»).
   statement {
     sid       = "ShadowScreening"
