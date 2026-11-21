@@ -4,7 +4,7 @@ Rules from Forma de trabajo («Cómo se fuerza el flujo») and Arquitectura y
 convenciones («Git y pull requests»). The PR text is read from the event file,
 never interpolated into a shell command.
 
-Usage: python flujo.py CHANGED_FILES_LIST  (reads GITHUB_EVENT_PATH)
+Usage: python flujo.py CHANGED_FILES  (NUL-separated; reads GITHUB_EVENT_PATH)
 """
 
 import json
@@ -29,14 +29,21 @@ SENSITIVE_PREFIXES = (
     "infra/",
     "supabase/",
 )
+# Files that can weaken a check without touching the check itself.
 SENSITIVE_FILES = (
+    "AGENTS.md",
+    "CLAUDE.md",
     "CODING_STANDARDS.md",
     "justfile",
     "mise.toml",
+    "pyproject.toml",
     ".pre-commit-config.yaml",
+    "apps/web/eslint.config.js",
 )
 
 REQUIRED_SECTIONS = ("Evidencia", "Peligro de fusión")
+HEADING = re.compile(r"^#{1,3}\s+(.+?)\s*$", re.MULTILINE)
+HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 DEPENDABOT = "dependabot[bot]"
 
 
@@ -54,11 +61,19 @@ def is_sensitive(path: str) -> bool:
 
 
 def has_section(body: str, name: str) -> bool:
-    """Tell whether the body has a level 2 or 3 heading with that name."""
-    heading = re.compile(
-        rf"^#{{2,3}}\s+{re.escape(name)}\s*$", re.IGNORECASE | re.MULTILINE
-    )
-    return heading.search(body) is not None
+    """Tell whether a level 1 to 3 heading with that name has content of its own.
+
+    Template hints are HTML comments, so an untouched template does not pass.
+    """
+    headings = list(HEADING.finditer(body))
+    for index, heading in enumerate(headings):
+        if heading.group(1).casefold() != name.casefold():
+            continue
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(body)
+        content = HTML_COMMENT.sub("", body[heading.end() : end])
+        if content.strip():
+            return True
+    return False
 
 
 def check(pr: PullRequest) -> list[str]:
@@ -84,7 +99,7 @@ def check(pr: PullRequest) -> list[str]:
             f"Sensitive paths ({touched}) need the Linear id at the end of the title."
         )
     errors.extend(
-        f"Sensitive paths need a «{section}» section (## heading) in the PR body."
+        f"Sensitive paths need a «{section}» section with content in the PR body."
         for section in REQUIRED_SECTIONS
         if not has_section(pr.body, section)
     )
@@ -95,7 +110,10 @@ def load(event_path: Path, changed_path: Path) -> PullRequest:
     """Build the PR from the GitHub event file and the list of changed files."""
     event = cast("dict[str, Any]", json.loads(event_path.read_text(encoding="utf-8")))
     pull = cast("dict[str, Any]", event["pull_request"])
-    changed = changed_path.read_text(encoding="utf-8").split()
+    # NUL-separated, as `git diff --name-only -z` writes it: names may hold spaces.
+    changed = [
+        name for name in changed_path.read_text(encoding="utf-8").split(chr(0)) if name
+    ]
     return PullRequest(
         title=str(pull["title"]),
         body=str(pull.get("body") or ""),

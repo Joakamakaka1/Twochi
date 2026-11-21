@@ -1,4 +1,8 @@
-from flujo import PullRequest, check
+import json
+from pathlib import Path
+
+import pytest
+from flujo import PullRequest, check, load
 
 COMPLETE_BODY = (
     "## Evidencia\n\njust check en verde.\n\n## Peligro de fusión\n\nDos sentidos.\n"
@@ -76,3 +80,49 @@ def test_dependabot_is_exempt_from_id_and_sections() -> None:
 
 def test_dependabot_still_needs_a_conventional_title() -> None:
     assert check(pr("Bump actions/checkout", author="dependabot[bot]", body=""))
+
+
+def test_template_placeholders_do_not_count_as_content() -> None:
+    body = (
+        "## Evidencia\n\n<!-- just check y lo que se probó a mano -->\n\n"
+        "## Peligro de fusión\n\n<!-- un sentido o dos -->\n"
+    )
+    errors = check(pr("ci: add pipeline (TWO-2)", body=body, changed=("justfile",)))
+    assert len(errors) == 2
+
+
+def test_empty_section_does_not_count() -> None:
+    body = "## Evidencia\n\n## Peligro de fusión\n\nDos sentidos.\n"
+    errors = check(pr("ci: add pipeline (TWO-2)", body=body, changed=("justfile",)))
+    assert len(errors) == 1
+    assert "Evidencia" in errors[0]
+
+
+@pytest.mark.parametrize(
+    "path", ["pyproject.toml", "CLAUDE.md", "AGENTS.md", "apps/web/eslint.config.js"]
+)
+def test_files_that_weaken_checks_are_sensitive(path: str) -> None:
+    assert check(pr("build: tweak config", body="", changed=(path,)))
+
+
+def test_load_reads_nul_separated_names(tmp_path: Path) -> None:
+    event = tmp_path / "event.json"
+    event.write_text(
+        json.dumps(
+            {
+                "pull_request": {
+                    "title": "ci: x (TWO-2)",
+                    "body": None,
+                    "user": {"login": "someone"},
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    changed = tmp_path / "changed.bin"
+    changed.write_bytes("infra/ñ.tf\0docs/a b.md\0".encode())
+
+    loaded = load(event, changed)
+
+    assert loaded.changed_files == ("infra/ñ.tf", "docs/a b.md")
+    assert loaded.body == ""
