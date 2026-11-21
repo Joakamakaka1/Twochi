@@ -27,7 +27,15 @@ test("files with an extension pass unchanged", () => {
     "/manifest.webmanifest",
     "/favicon.ico",
     "/sw.js",
+    // A dot in the last segment reads as a file, so a route cannot end in one.
+    "/u/john.doe",
   ]) {
+    assert.equal(uriFor(uri), uri, uri);
+  }
+});
+
+test("api paths outside the /api/* behavior pass unchanged", () => {
+  for (const uri of ["/api", "/API", "/Api/pings", "/API/health"]) {
     assert.equal(uriFor(uri), uri, uri);
   }
 });
