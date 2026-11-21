@@ -6,4 +6,4 @@ El stack de `prod`. Hoy: el borde (CloudFront, WAF, certificado y registros DNS)
 - Variables que da el pipeline: `api_package_key` (el zip ya subido al bucket de artefactos) y `supabase_url`.
 - Backend: `terraform init -backend-config="bucket=<bucket de estado>"`.
 - Tras el primer `apply`, la suscripción al plan flat-rate Free es manual (TWO-15): el recurso de Terraform aún no existe.
-- Cada rol que se cree aquí lleva `permissions_boundary = data.aws_iam_policy.workload_boundary.arn`; sin él, `twochi-apply` no puede crearlo.
+- Cada rol que se cree aquí lleva `permissions_boundary = local.workload_boundary_arn`; sin él, `twochi-apply` no puede crearlo.

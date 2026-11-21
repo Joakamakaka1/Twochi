@@ -2,6 +2,7 @@
 
 import json
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -33,6 +34,7 @@ def token(
     *,
     key: ec.EllipticCurvePrivateKey = SIGNING_KEY,
     expires_in: timedelta = timedelta(minutes=5),
+    drop: tuple[str, ...] = (),
     **overrides: Any,
 ) -> str:
     now = datetime.now(UTC)
@@ -46,15 +48,20 @@ def token(
         "role": "authenticated",
     }
     claims.update(overrides)
+    for claim in drop:
+        del claims[claim]
     return jwt.encode(claims, key, algorithm="ES256", headers={"kid": KID})
+
+
+def app_with(lookup: Callable[[str], jwt.PyJWK]) -> TestClient:
+    verifier = TokenVerifier(issuer=ISSUER, audience=AUDIENCE, signing_key=lookup)
+    # Unexpected errors must still answer with a problem, so they are not re-raised.
+    return TestClient(create_app(verifier), raise_server_exceptions=False)
 
 
 @pytest.fixture
 def client() -> TestClient:
-    verifier = TokenVerifier(
-        issuer=ISSUER, audience=AUDIENCE, signing_key=lambda _token: public_jwk()
-    )
-    return TestClient(create_app(verifier))
+    return app_with(lambda _token: public_jwk())
 
 
 def ping(client: TestClient, auth: str | None) -> Any:
@@ -89,6 +96,10 @@ def test_bearer_prefix_is_accepted(client: TestClient) -> None:
         token(iss="https://someone-else.supabase.co/auth/v1"),
         token(aud="anon"),
         token(sub="not-a-uuid"),
+        token(drop=("exp",)),
+        token(drop=("iat",)),
+        token(drop=("sub",)),
+        jwt.encode({"sub": str(USER_ID)}, "a-shared-secret-of-32-bytes-long!", "HS256"),
     ],
     ids=[
         "missing",
@@ -99,6 +110,10 @@ def test_bearer_prefix_is_accepted(client: TestClient) -> None:
         "wrong-issuer",
         "wrong-audience",
         "bad-subject",
+        "no-exp",
+        "no-iat",
+        "no-sub",
+        "hs256",
     ],
 )
 def test_rejects_unauthenticated_requests(client: TestClient, auth: str | None) -> None:
@@ -137,3 +152,57 @@ def test_unknown_route_is_a_problem(client: TestClient) -> None:
     response = client.get("/api/nothing-here")
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
+
+
+def test_rejects_tokens_without_aal_claim(client: TestClient) -> None:
+    response = ping(client, token(drop=("aal",)))
+    assert response.status_code == 403
+    assert response.json()["code"] == "mfa_required"
+
+
+def test_tolerates_a_token_issued_a_moment_ahead_of_our_clock(
+    client: TestClient,
+) -> None:
+    ahead = datetime.now(UTC) + timedelta(seconds=2)
+    assert ping(client, token(iat=ahead)).status_code == 200
+
+
+def test_unknown_key_id_is_unauthenticated() -> None:
+    def lookup(_token: str) -> jwt.PyJWK:
+        raise jwt.PyJWKClientError("Unable to find a signing key that matches")
+
+    response = ping(app_with(lookup), token())
+    assert response.status_code == 401
+    assert response.json()["code"] == "unauthenticated"
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        jwt.PyJWKClientConnectionError("JWKS endpoint unreachable"),
+        jwt.PyJWKSetError("The JWKS endpoint did not return any usable keys"),
+        json.JSONDecodeError("Expecting value", "<html>", 0),
+    ],
+    ids=["unreachable", "no-usable-keys", "not-json"],
+)
+def test_broken_key_set_is_unavailable_not_unauthenticated(
+    failure: Exception,
+) -> None:
+    def lookup(_token: str) -> jwt.PyJWK:
+        raise failure
+
+    response = ping(app_with(lookup), token())
+    assert response.status_code == 503
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "auth_unavailable"
+
+
+def test_unexpected_error_is_a_problem_without_details() -> None:
+    def lookup(_token: str) -> jwt.PyJWK:
+        raise RuntimeError("secret internals")
+
+    response = ping(app_with(lookup), token())
+    assert response.status_code == 500
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "internal_error"
+    assert "secret internals" not in response.text

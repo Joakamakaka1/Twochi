@@ -43,6 +43,10 @@ async def _http_error(_request: Request, error: Exception) -> JSONResponse:
     return problem(status, codes.get(status, "http_error"), "Request failed")
 
 
+async def _internal_error(_request: Request, _error: Exception) -> JSONResponse:
+    return problem(500, "internal_error", "Unexpected error")
+
+
 def install(app: FastAPI) -> None:
     """Register every exception handler on the app."""
     app.add_exception_handler(UnauthenticatedError, _unauthenticated)
@@ -50,3 +54,5 @@ def install(app: FastAPI) -> None:
     app.add_exception_handler(AuthUnavailableError, _auth_unavailable)
     app.add_exception_handler(RequestValidationError, _invalid_request)
     app.add_exception_handler(HTTPException, _http_error)
+    # Anything else: a problem without details; Starlette still logs the traceback.
+    app.add_exception_handler(Exception, _internal_error)

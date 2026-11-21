@@ -23,7 +23,7 @@ data "aws_iam_policy_document" "lambda_trust" {
 resource "aws_iam_role" "api" {
   name                 = local.api_name
   assume_role_policy   = data.aws_iam_policy_document.lambda_trust.json
-  permissions_boundary = data.aws_iam_policy.workload_boundary.arn
+  permissions_boundary = local.workload_boundary_arn
 }
 
 data "aws_iam_policy_document" "api" {
@@ -53,6 +53,10 @@ resource "aws_lambda_function" "api" {
   architectures = ["arm64"]
   memory_size   = 1024
   timeout       = 30
+
+  # Caps what unauthenticated traffic that slips past the WAF can cost: rejections
+  # happen inside the function. Two people never need more (AWS, «¿Una Lambda o dos?»).
+  reserved_concurrent_executions = 10
 
   s3_bucket = local.artifacts_bucket
   s3_key    = var.api_package_key

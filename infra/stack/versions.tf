@@ -37,13 +37,13 @@ locals {
   account_id       = data.aws_caller_identity.current.account_id
   domain           = "twochi.jcvstro.dev"
   artifacts_bucket = "twochi-artifacts-${local.account_id}"
+
+  # Created by infra/bootstrap. Built here rather than read: bootstrap's IAM is
+  # off-limits to twochi-apply.
+  workload_boundary_arn = "arn:aws:iam::${local.account_id}:policy/twochi-workload-boundary"
 }
 
 # Created by infra/bootstrap.
 data "aws_route53_zone" "twochi" {
   name = local.domain
-}
-
-data "aws_iam_policy" "workload_boundary" {
-  name = "twochi-workload-boundary"
 }
