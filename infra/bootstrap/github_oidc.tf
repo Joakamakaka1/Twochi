@@ -73,9 +73,39 @@ data "aws_iam_policy_document" "ci_guardrails" {
       "ssm:GetParametersByPath",
       "ssm:GetParameterHistory",
       "secretsmanager:GetSecretValue",
-      "kms:Decrypt",
     ]
     resources = ["*"]
+  }
+
+  # kms:Decrypt only as Lambda decrypting the environment of a twochi-* function, which
+  # GetFunction does on the caller's behalf; without it the plan sees no variables and
+  # always proposes to add them back. The environment never holds secrets (ADR 0005).
+  # Two statements because conditions in one statement are ANDed; a missing key matches
+  # both negated operators, so direct calls stay denied.
+  statement {
+    sid       = "DenyDecryptOutsideLambda"
+    effect    = "Deny"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringNotEquals"
+      variable = "kms:ViaService"
+      values   = ["lambda.eu-west-1.amazonaws.com"]
+    }
+  }
+
+  statement {
+    sid       = "DenyDecryptOutsideOwnFunctions"
+    effect    = "Deny"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringNotLike"
+      variable = "kms:EncryptionContext:aws:lambda:FunctionArn"
+      values   = ["arn:aws:lambda:eu-west-1:${local.account_id}:function:twochi-*"]
+    }
   }
 
   # Objects are readable only in the state bucket (a plan needs it) and the artifacts

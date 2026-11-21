@@ -1,6 +1,6 @@
 # 0003. Secretos y datos fuera del estado de Terraform y del alcance de CI
 
-- Estado: aceptada
+- Estado: aceptada; el punto 3 lo modifica en parte [ADR 0005](0005-ci-reads-lambda-environment.md)
 - Fecha: 2026-11-21
 
 ## Contexto
@@ -15,7 +15,7 @@ CI/CD e IaC ya decide que los secretos no pasan por Terraform: el código conced
 
 1. Los parámetros de SSM los crea y actualiza el workflow manual Bitwarden→SSM con `put-parameter` (`SecureString`, clave `aws/ssm`). Terraform no declara ningún parámetro: solo da a cada rol de Lambda `ssm:GetParameter` sobre sus propias rutas.
 2. El estado nunca guarda un secreto. En el stack no entran `aws_ssm_parameter` con valor, `random_password`, secretos en variables de entorno de Lambda ni cabeceras secretas de origen. Si algún día hiciera falta, se usan argumentos write-only, que no se guardan en el estado.
-3. Los roles de CI no leen secretos ni datos: ningún parámetro de SSM, secreto ni `kms:Decrypt`; ningún objeto fuera de los buckets de estado y de artefactos; ni líneas de log ni mensajes de SQS.
+3. Los roles de CI no leen secretos ni datos: ningún parámetro de SSM, secreto ni `kms:Decrypt`; ningún objeto fuera de los buckets de estado y de artefactos; ni líneas de log ni mensajes de SQS. [ADR 0005](0005-ci-reads-lambda-environment.md) permite `kms:Decrypt` solo cuando Lambda descifra el environment de una función propia.
 4. Los buckets de larga vida (estado, artefactos, backups y dataset) viven en `infra/bootstrap`, no en el stack. `twochi-apply` no puede cambiar su configuración, purgar versiones ni escribir en los de datos.
 5. Los ARN de los roles y los nombres de los buckets van a GitHub como secretos, no como variables: llevan el ID de la cuenta y GitHub solo enmascara los secretos en los logs.
 
