@@ -21,6 +21,17 @@ locals {
     "arn:aws:iam::${local.acct}:role/twochi-apply",
     aws_iam_openid_connect_provider.github.arn,
     aws_iam_policy.workload_boundary.arn,
+    aws_iam_role.findings_forwarder.arn,
+  ]
+
+  # The detection alerts (detection.tf) carry the twochi- prefix, which the stack's
+  # SNS, EventBridge and IAM permissions match.
+  detection_alert_arns = [
+    aws_sns_topic.security_alerts.arn,
+    "${aws_sns_topic.security_alerts.arn}:*",
+    aws_cloudwatch_event_rule.guardduty_findings.arn,
+    aws_cloudwatch_event_rule.access_analyzer_findings.arn,
+    "arn:aws:events:*:${local.acct}:rule/${local.guardduty_forward_rule}",
   ]
 
   bootstrap_bucket_arns = [for name in local.bootstrap_buckets : "arn:aws:s3:::${name}"]
@@ -165,6 +176,21 @@ data "aws_iam_policy_document" "apply_stack" {
       "guardduty:Update*",
     ]
     resources = ["*"]
+  }
+
+  # Nor can it silence the findings on their way to the email: no change to the alerts
+  # topic, its subscription or the rules that feed it. Reads stay for refreshes. The
+  # resources are exact ARNs, so the NotAction touches nothing else.
+  statement {
+    sid    = "ProtectDetectionAlerts"
+    effect = "Deny"
+    not_actions = [
+      "sns:Get*",
+      "sns:List*",
+      "events:Describe*",
+      "events:List*",
+    ]
+    resources = local.detection_alert_arns
   }
 
   # Function URLs only with AWS_IAM: the edge signs with OAC.

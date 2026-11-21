@@ -44,16 +44,16 @@ data "aws_iam_policy_document" "github_trust" {
   }
 }
 
-# Shared by both CI roles: nothing outside the three regions (GuardDuty runs in all of
-# them), and nothing that reads secrets or real data. A plan runs provider code with
-# whatever the PR brings, and the repository's logs are public, so anything these roles
-# can read may end up published.
+# Shared by both CI roles: nothing outside the three regions, and nothing that reads
+# secrets or real data. A plan runs provider code with whatever the PR brings, and the
+# repository's logs are public, so anything these roles can read may end up published.
+# GuardDuty, which runs in every region, belongs to bootstrap (ADR 0006).
 data "aws_iam_policy_document" "ci_guardrails" {
   statement {
-    sid         = "DenyOtherRegions"
-    effect      = "Deny"
-    not_actions = ["guardduty:*"]
-    resources   = ["*"]
+    sid       = "DenyOtherRegions"
+    effect    = "Deny"
+    actions   = ["*"]
+    resources = ["*"]
 
     condition {
       test     = "StringNotEquals"
