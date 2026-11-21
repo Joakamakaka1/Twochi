@@ -46,7 +46,9 @@ jobs:
           changed="$RUNNER_TEMP/changed.txt"
           all=false
           if [ "$EVENT_NAME" = "pull_request" ]; then
-            git diff --name-only "$BASE_SHA" HEAD > "$changed"
+            # --no-renames lists both sides of a move, so a file moved out of a path
+            # still triggers its job; quotePath=false keeps non-ASCII names unquoted.
+            git -c core.quotePath=false diff --name-only --no-renames "$BASE_SHA" HEAD > "$changed"
           else
             # On main every job runs: a push is cheap and leaves nothing unchecked.
             all=true
@@ -62,7 +64,8 @@ jobs:
               echo "$2=false"
             fi >> "$GITHUB_OUTPUT"
           }
-          flag '(\.py$|(^|/)pyproject\.toml$|^uv\.lock$|^\.python-version$)' python
+          # By folder, not by extension: prompts, fixtures and data also feed the tests.
+          flag '(\.py$|^packages/|^apps/(api|worker|mcp)/|^\.github/scripts/|^pyproject\.toml$|^uv\.lock$|^\.python-version$)' python
           # A change in apps/api also checks the front, which depends on its contract.
           flag '^(apps/web/|apps/api/|packages/api-client/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$)' web
           flag '^infra/' infra
@@ -159,12 +162,19 @@ jobs:
         with:
           version: ${{ env.MISE_VERSION }}
           install_args: python
-      # The title and body are read from the event file inside the script.
+      # The title and body are read from the event file inside the script. The script
+      # comes from the base branch, so a PR cannot relax the check that judges it; only
+      # when the base has none yet (the PR that adds it) does the PR's copy run.
       - env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          git diff --name-only "$BASE_SHA" HEAD > "$RUNNER_TEMP/changed.txt"
-          python .github/scripts/flujo.py "$RUNNER_TEMP/changed.txt"
+          git -c core.quotePath=false diff --name-only --no-renames -z "$BASE_SHA" HEAD > "$RUNNER_TEMP/changed.bin"
+          if git cat-file -e "$BASE_SHA:.github/scripts/flujo.py" 2>/dev/null; then
+            git show "$BASE_SHA:.github/scripts/flujo.py" > "$RUNNER_TEMP/flujo.py"
+          else
+            cp .github/scripts/flujo.py "$RUNNER_TEMP/flujo.py"
+          fi
+          python "$RUNNER_TEMP/flujo.py" "$RUNNER_TEMP/changed.bin"
 
   ci-ok:
     if: always()
