@@ -3,6 +3,9 @@
 CI/CD e IaC, «Plan y apply»: the plan fails if it brings `*` as the resource of an
 IAM policy or deletes a bucket. Deny statements may use `*`: they only narrow. An
 Allow on `*` is also what most AWS managed policies grant, so attaching one fails too.
+Two more holes of the same kind fail as well: an Allow to any principal without a
+condition (trust or resource policy) and a service invoke permission on a Lambda
+without `source_arn` or `source_account`, which any account's resource could use.
 
 A policy the plan cannot know until apply (it depends on an ARN still to be created)
 passes only when it comes from an `aws_iam_policy_document`, whose statements the plan
@@ -23,14 +26,8 @@ type Json = dict[str, Any]
 POLICY_DOCUMENT = "aws_iam_policy_document"
 AWS_MANAGED_POLICY = "arn:aws:iam::aws:policy/"
 BUCKET_TYPES = frozenset({"aws_s3_bucket", "aws_s3_directory_bucket"})
-ATTACHMENT_TYPES = frozenset(
-    {
-        "aws_iam_role_policy_attachment",
-        "aws_iam_user_policy_attachment",
-        "aws_iam_group_policy_attachment",
-        "aws_iam_policy_attachment",
-    }
-)
+POLICY_ATTRIBUTES = ("policy", "assume_role_policy")
+MERGED_DOCUMENTS = ("source_policy_documents", "override_policy_documents")
 INDEX = re.compile(r"\[[^\]]*\]")
 DOCUMENT_REFERENCE = re.compile(rf"^data\.{POLICY_DOCUMENT}\.[A-Za-z0-9_-]+")
 
@@ -43,46 +40,79 @@ def _as_list(value: object) -> list[object]:
     return [value]
 
 
+def _is_allow(effect: object) -> bool:
+    return str(effect or "Allow").casefold() == "allow"
+
+
 def _allows_everything(
     effect: object, resources: object, not_resources: object
 ) -> bool:
-    if str(effect or "Allow").casefold() != "allow":
+    if not _is_allow(effect):
         return False
     return "*" in _as_list(resources) or bool(_as_list(not_resources))
 
 
+def _json_principal_is_open(principal: object) -> bool:
+    if principal == "*":
+        return True
+    if isinstance(principal, dict):
+        values = cast("dict[str, object]", principal).values()
+        return any("*" in _as_list(value) for value in values)
+    return False
+
+
 def json_policy_violations(address: str, text: str) -> list[str]:
-    """Allow statements on `*`, or on everything but a list, in a policy JSON."""
+    """Allow on `*` or on any principal without a condition, in a policy JSON."""
     try:
         document = cast("Json", json.loads(text))
     except json.JSONDecodeError:
         return [f"{address}: its policy is not valid JSON, so it cannot be checked."]
+    found: list[str] = []
     statements = cast("list[Json]", _as_list(document.get("Statement")))
-    return [
-        f"{address}: statement {statement.get('Sid') or index} allows `*` as resource."
-        for index, statement in enumerate(statements)
+    for index, statement in enumerate(statements):
+        name = statement.get("Sid") or index
         if _allows_everything(
             statement.get("Effect"),
             statement.get("Resource"),
             statement.get("NotResource"),
-        )
-    ]
+        ):
+            found.append(f"{address}: statement {name} allows `*` as resource.")
+        open_principal = _json_principal_is_open(statement.get("Principal"))
+        if (
+            _is_allow(statement.get("Effect"))
+            and (open_principal or "NotPrincipal" in statement)
+            and not statement.get("Condition")
+        ):
+            found.append(f"{address}: statement {name} allows any principal.")
+    return found
 
 
 def document_violations(address: str, values: Mapping[str, Any]) -> list[str]:
     """Allow statements on `*` in an `aws_iam_policy_document` data source."""
     statements = cast("list[Json]", _as_list(values.get("statement")))
-    found = [
-        f"{address}: statement {statement.get('sid') or index} allows `*` as resource."
-        for index, statement in enumerate(statements)
+    found: list[str] = []
+    for index, statement in enumerate(statements):
+        name = statement.get("sid") or index
         if _allows_everything(
             statement.get("effect"),
             statement.get("resources"),
             statement.get("not_resources"),
-        )
-    ]
+        ):
+            found.append(f"{address}: statement {name} allows `*` as resource.")
+        principals = cast("list[Json]", _as_list(statement.get("principals")))
+        open_principal = any(
+            principal.get("type") == "*"
+            or "*" in _as_list(principal.get("identifiers"))
+            for principal in principals
+        ) or bool(_as_list(statement.get("not_principals")))
+        if (
+            _is_allow(statement.get("effect"))
+            and open_principal
+            and not _as_list(statement.get("condition"))
+        ):
+            found.append(f"{address}: statement {name} allows any principal.")
     # Documents merged in as JSON; an unknown one is another document, checked apart.
-    for field in ("source_policy_documents", "override_policy_documents"):
+    for field in MERGED_DOCUMENTS:
         for text in _as_list(values.get(field)):
             if isinstance(text, str):
                 found.extend(json_policy_violations(address, text))
@@ -128,22 +158,71 @@ def _policy_violations(change: Json, config: Mapping[str, Json]) -> Iterator[str
     after = cast("Json", change["change"].get("after") or {})
     unknown = cast("Json", change["change"].get("after_unknown") or {})
     config_address = _config_address(change)
-    if isinstance(after.get("policy"), str):
-        yield from json_policy_violations(address, after["policy"])
-    elif unknown.get("policy") is True and not _unknown_policy_is_checked(
-        config_address, "policy", config
-    ):
-        yield (
-            f"{address}: its policy is only known at apply and does not come from an "
-            f"{POLICY_DOCUMENT}, so it cannot be checked."
-        )
+    for attribute in POLICY_ATTRIBUTES:
+        if isinstance(after.get(attribute), str):
+            yield from json_policy_violations(address, after[attribute])
+        elif unknown.get(attribute) is True and not _unknown_policy_is_checked(
+            config_address, attribute, config
+        ):
+            yield (
+                f"{address}: its {attribute} is only known at apply and does not come "
+                f"from an {POLICY_DOCUMENT}, so it cannot be checked."
+            )
+    # Deprecated in the provider and unused here: an unknown one simply fails.
     for inline in cast("list[Json]", _as_list(after.get("inline_policy"))):
         if isinstance(inline.get("policy"), str):
             yield from json_policy_violations(address, inline["policy"])
-    arns = [after.get("policy_arn"), *_as_list(after.get("managed_policy_arns"))]
+        else:
+            yield (
+                f"{address}: an inline_policy is only known at apply, "
+                "so it cannot be checked."
+            )
+    arns = [
+        after.get("policy_arn"),
+        *_as_list(after.get("managed_policy_arns")),
+        *_as_list(after.get("policy_arns")),
+    ]
     for arn in arns:
         if isinstance(arn, str) and arn.startswith(AWS_MANAGED_POLICY):
             yield f"{address}: attaches the AWS managed policy {arn}, which allows `*`."
+    if change["type"] == "aws_lambda_permission":
+        yield from _invoke_permission_violations(address, after, unknown)
+
+
+def _invoke_permission_violations(
+    address: str, after: Json, unknown: Json
+) -> Iterator[str]:
+    principal = str(after.get("principal") or "")
+    if principal == "*":
+        yield f"{address}: lets any principal invoke the function."
+        return
+    scoped = any(
+        after.get(field) or unknown.get(field) is True
+        for field in ("source_arn", "source_account")
+    )
+    if principal.endswith(".amazonaws.com") and not scoped:
+        yield (
+            f"{address}: lets {principal} invoke the function without source_arn or "
+            "source_account, so any account's resource could."
+        )
+
+
+def _deferred_document_violations(
+    change: Json, config: Mapping[str, Json]
+) -> Iterator[str]:
+    """A document read at apply: its statements, and merged JSON it cannot show yet."""
+    address = str(change["address"])
+    after = cast("Json", change["change"].get("after") or {})
+    yield from document_violations(address, after)
+    for field in MERGED_DOCUMENTS:
+        pending = any(not isinstance(text, str) for text in _as_list(after.get(field)))
+        if pending and not _unknown_policy_is_checked(
+            _config_address(change), field, config
+        ):
+            yield (
+                f"{address}: its {field} is only known at apply and does not come "
+                f"from an {POLICY_DOCUMENT}, so it cannot be checked."
+            )
 
 
 def violations(plan: Json) -> list[str]:
@@ -157,8 +236,7 @@ def violations(plan: Json) -> list[str]:
         kind = str(change["type"])
         if change["mode"] == "data":
             if kind == POLICY_DOCUMENT:
-                after = cast("Json", change["change"].get("after") or {})
-                found.extend(document_violations(str(change["address"]), after))
+                found.extend(_deferred_document_violations(change, config))
             continue
         if kind in BUCKET_TYPES and "delete" in actions:
             found.append(f"{change['address']}: the plan deletes a bucket.")

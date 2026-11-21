@@ -186,8 +186,10 @@ jobs:
         with:
           version: ${{ env.MISE_VERSION }}
           install_args: python uv terraform
-      # The guard comes from the base branch, so a PR cannot relax the check that judges
-      # it; only when the base has none yet (the PR that adds it) does the PR's copy run.
+      # The guard comes from the base branch, so editing it does not change this run's
+      # verdict by accident. It is no barrier against the PR's author, who controls this
+      # workflow too: the deploy on main runs the guard already in prod, and review is
+      # the control. Only when the base has no guard yet does the PR's copy run.
       - if: steps.ready.outputs.ok == 'true'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -218,11 +220,17 @@ jobs:
           terraform init -input=false -lockfile=readonly -backend-config="bucket=$STATE_BUCKET"
           terraform plan -input=false -lock=false -out="$RUNNER_TEMP/stack.tfplan"
           terraform show -json "$RUNNER_TEMP/stack.tfplan" > "$RUNNER_TEMP/plan.json"
-      - if: steps.ready.outputs.ok == 'true'
+      # Also after a failed plan, so the PR comment never keeps an older green summary.
+      - if: always() && steps.ready.outputs.ok == 'true'
         id: check
         run: |
           status=0
-          python "$RUNNER_TEMP/plan_check.py" "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/summary.md" || status=$?
+          if [ -s "$RUNNER_TEMP/plan.json" ]; then
+            python "$RUNNER_TEMP/plan_check.py" "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/summary.md" || status=$?
+          else
+            printf '### `terraform plan` · infra/stack\n\n❌ The plan did not finish: see the run log.\n' > "$RUNNER_TEMP/summary.md"
+            status=1
+          fi
           cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
           {
             echo "summary<<TWOCHI_PLAN_SUMMARY"
@@ -247,9 +255,17 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           SUMMARY: ${{ needs.plan.outputs.summary }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # One comment per PR, found by its marker and edited on every run.
         run: |
-          printf '%s\n\n[Full plan in the run log](%s)\n' "$SUMMARY" "$RUN_URL" > "$RUNNER_TEMP/comment.md"
-          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comment.md" --edit-last --create-if-none
+          marker='<!-- twochi-plan -->'
+          printf '%s\n%s\n\n[Full plan in the run log](%s)\n' "$marker" "$SUMMARY" "$RUN_URL" > "$RUNNER_TEMP/comment.md"
+          id=$(gh api --paginate "repos/$GH_REPO/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | tail -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$GH_REPO/issues/comments/$id" -F "body=@$RUNNER_TEMP/comment.md" > /dev/null
+          else
+            gh api --method POST "repos/$GH_REPO/issues/$PR/comments" -F "body=@$RUNNER_TEMP/comment.md" > /dev/null
+          fi
 
   flujo:
     if: github.event_name == 'pull_request'

@@ -259,3 +259,143 @@ def test_main_passes_clean_plan(tmp_path: Path) -> None:
     plan_path = tmp_path / "plan.json"
     plan_path.write_text(json.dumps(plan()), encoding="utf-8")
     assert main(["plan_check.py", str(plan_path)]) == 0
+
+
+def test_fails_trust_policy_open_to_any_principal() -> None:
+    trust = policy(
+        {"Effect": "Allow", "Principal": {"AWS": "*"}, "Action": "sts:AssumeRole"}
+    )
+    role = change(
+        "aws_iam_role.api",
+        "aws_iam_role",
+        ["create"],
+        after={"assume_role_policy": trust},
+    )
+    assert violations(plan(role)) == [
+        "aws_iam_role.api: statement 0 allows any principal."
+    ]
+
+
+def test_passes_open_principal_narrowed_by_a_condition_or_denied() -> None:
+    text = policy(
+        {
+            "Effect": "Allow",
+            "Principal": {"Service": "cloudfront.amazonaws.com"},
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::twochi-web/*",
+        },
+        {
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::twochi-web/*",
+            "Condition": {"StringEquals": {"AWS:SourceArn": "arn:aws:cloudfront::1:x"}},
+        },
+        {
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "s3:*",
+            "Resource": "arn:aws:s3:::w",
+        },
+    )
+    bucket_policy = change(
+        "aws_s3_bucket_policy.web",
+        "aws_s3_bucket_policy",
+        ["create"],
+        after={"policy": text},
+    )
+    assert violations(plan(bucket_policy)) == []
+
+
+def test_fails_policy_document_open_to_any_principal() -> None:
+    document = {
+        "address": "data.aws_iam_policy_document.queue",
+        "mode": "data",
+        "type": "aws_iam_policy_document",
+        "values": {
+            "statement": [
+                {
+                    "sid": "Open",
+                    "effect": "Allow",
+                    "resources": ["arn:aws:sqs:eu-west-1:1:twochi-jobs"],
+                    "principals": [{"type": "AWS", "identifiers": ["*"]}],
+                    "condition": [],
+                }
+            ]
+        },
+    }
+    assert violations(plan(prior=[document])) == [
+        "data.aws_iam_policy_document.queue: statement Open allows any principal."
+    ]
+
+
+def permission(after: Json, unknown: Json | None = None) -> Json:
+    return change(
+        "aws_lambda_permission.edge",
+        "aws_lambda_permission",
+        ["create"],
+        after=after,
+        unknown=unknown,
+    )
+
+
+def test_fails_service_invoke_permission_without_source() -> None:
+    found = violations(plan(permission({"principal": "cloudfront.amazonaws.com"})))
+    assert len(found) == 1
+    assert "without source_arn" in found[0]
+
+
+def test_fails_invoke_permission_for_anyone() -> None:
+    assert violations(plan(permission({"principal": "*"})))
+
+
+def test_passes_service_invoke_permission_with_source_known_at_apply() -> None:
+    edge = permission({"principal": "cloudfront.amazonaws.com"}, {"source_arn": True})
+    assert violations(plan(edge)) == []
+
+
+def deferred_document(references: list[str]) -> Json:
+    document = change(
+        "data.aws_iam_policy_document.x",
+        "aws_iam_policy_document",
+        ["read"],
+        mode="data",
+        after={"statement": [], "source_policy_documents": [None]},
+    )
+    config = [
+        {
+            "address": "data.aws_iam_policy_document.x",
+            "expressions": {"source_policy_documents": {"references": references}},
+        }
+    ]
+    return plan(document, config=config)
+
+
+def test_fails_merged_json_only_known_at_apply() -> None:
+    found = violations(deferred_document(["aws_cloudwatch_log_group.x.arn"]))
+    assert len(found) == 1
+    assert "source_policy_documents" in found[0]
+
+
+def test_passes_merged_document_only_known_at_apply() -> None:
+    assert violations(deferred_document(["data.aws_iam_policy_document.y.json"])) == []
+
+
+def test_fails_inline_policy_only_known_at_apply() -> None:
+    role = change(
+        "aws_iam_role.api",
+        "aws_iam_role",
+        ["create"],
+        after={"inline_policy": [{"policy": None}]},
+    )
+    assert len(violations(plan(role))) == 1
+
+
+def test_fails_aws_managed_policy_in_exclusive_attachments() -> None:
+    exclusive = change(
+        "aws_iam_role_policy_attachments_exclusive.api",
+        "aws_iam_role_policy_attachments_exclusive",
+        ["create"],
+        after={"policy_arns": ["arn:aws:iam::aws:policy/AdministratorAccess"]},
+    )
+    assert len(violations(plan(exclusive))) == 1
