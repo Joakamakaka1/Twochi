@@ -1,0 +1,181 @@
+# PR checks. One workflow: `changes` decides which jobs run and `ci-ok` sums them up,
+# so the ruleset requires a single check that always reports (CI/CD e IaC).
+name: ci
+
+on:
+  pull_request:
+    # `edited` re-runs everything when the title or body change, so `flujo` and the
+    # required `ci-ok` always describe the latest text and the latest code together.
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  MISE_VERSION: "2026.9.18"
+  # mise only reads configuration from this checkout.
+  MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+  UV_MALWARE_CHECK: "1"
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      python: ${{ steps.filter.outputs.python }}
+      web: ${{ steps.filter.outputs.web }}
+      infra: ${{ steps.filter.outputs.infra }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: filter
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed="$RUNNER_TEMP/changed.txt"
+          all=false
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            git diff --name-only "$BASE_SHA" HEAD > "$changed"
+          else
+            # On main every job runs: a push is cheap and leaves nothing unchecked.
+            all=true
+            : > "$changed"
+          fi
+          cat "$changed"
+          # The task runner, the tool versions and this workflow affect every job.
+          shared='^(justfile|mise\.toml|\.github/workflows/)'
+          flag() {
+            if [ "$all" = true ] || grep -Eq "$1" "$changed" || grep -Eq "$shared" "$changed"; then
+              echo "$2=true"
+            else
+              echo "$2=false"
+            fi >> "$GITHUB_OUTPUT"
+          }
+          flag '(\.py$|(^|/)pyproject\.toml$|^uv\.lock$|^\.python-version$)' python
+          # A change in apps/api also checks the front, which depends on its contract.
+          flag '^(apps/web/|apps/api/|packages/api-client/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$)' web
+          flag '^infra/' infra
+          flag '^\.github/' workflows
+
+  python:
+    needs: changes
+    if: needs.changes.outputs.python == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: python uv node just
+      - run: uv sync --locked
+      - run: just check-py
+
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: node pnpm just
+      - run: pnpm install --frozen-lockfile
+      - run: just check-web
+
+  infra:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: terraform tflint just
+      - run: just check-infra
+        env:
+          # tflint --init downloads its rulesets from GitHub releases.
+          GITHUB_TOKEN: ${{ github.token }}
+
+  workflows:
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: python uv actionlint pipx:zizmor just
+      - run: just check-workflows
+        env:
+          # Enables zizmor's online audits (impostor commits, known-vulnerable actions).
+          GH_TOKEN: ${{ github.token }}
+
+  flujo:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: python
+      # The title and body are read from the event file inside the script.
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff --name-only "$BASE_SHA" HEAD > "$RUNNER_TEMP/changed.txt"
+          python .github/scripts/flujo.py "$RUNNER_TEMP/changed.txt"
+
+  ci-ok:
+    if: always()
+    needs: [changes, python, web, infra, workflows, flujo]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      # Skipped jobs pass: they had nothing to check. Failed or cancelled ones do not.
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "::error::A required job failed or was cancelled."
+          exit 1
+      - run: echo "All required jobs passed or were skipped."

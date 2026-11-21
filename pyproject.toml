@@ -61,18 +61,21 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 # pytest relies on bare asserts.
 "**/tests/**" = ["S101"]
+"**/test_*.py" = ["S101"]
 
 [tool.pyright]
 typeCheckingMode = "strict"
 pythonVersion = "3.14"
 venvPath = "."
 venv = ".venv"
-include = ["packages", "apps"]
+include = ["packages", "apps", ".github/scripts"]
 exclude = ["**/node_modules", "**/.venv", "apps/web", "packages/api-client"]
 
 [tool.pytest.ini_options]
 minversion = "9.0"
-testpaths = ["packages", "apps"]
+testpaths = ["packages", "apps", ".github/scripts"]
+# The CI scripts are plain modules, not packages: their tests import them by name.
+pythonpath = [".github/scripts"]
 addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra"]
 xfail_strict = true
 
