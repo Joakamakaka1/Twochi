@@ -99,7 +99,14 @@ def test_empty_section_does_not_count() -> None:
 
 
 @pytest.mark.parametrize(
-    "path", ["pyproject.toml", "CLAUDE.md", "AGENTS.md", "apps/web/eslint.config.js"]
+    "path",
+    [
+        "pyproject.toml",
+        "CLAUDE.md",
+        "AGENTS.md",
+        "apps/web/eslint.config.js",
+        "apps/api/src/twochi_api/auth.py",
+    ],
 )
 def test_files_that_weaken_checks_are_sensitive(path: str) -> None:
     assert check(pr("build: tweak config", body="", changed=(path,)))
