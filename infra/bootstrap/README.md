@@ -15,7 +15,7 @@ Lo que debe existir antes de que corra el pipeline y lo que no debe estar al alc
 | `twochi-apply` | Escribe el stack, solo desde el entorno `prod` (tu aprobación, solo desde `main`) |
 | `twochi-workload-boundary` | Techo de permisos de cada rol que crea el stack |
 | Bloqueo de acceso público de la cuenta | Ningún bucket puede hacerse público, diga lo que diga una política |
-| `twochi-external-access` | Access Analyzer: detecta si una política abre algo a otra cuenta. Sus avisos por correo llegan con TWO-19 |
+| `ExternalAccess-6KkUmMA8mfdV` | Access Analyzer: detecta si una política abre algo a otra cuenta. AWS admite uno por cuenta y región; este quedó de un proyecto anterior y `bootstrap` lo adopta con un `import`, con su nombre, porque renombrarlo lo recrea. Sus avisos por correo llegan con TWO-19 |
 
 Los cuatro buckets usan el módulo `infra/modules/private_bucket`: privados, cifrados, solo por TLS y con `prevent_destroy`.
 

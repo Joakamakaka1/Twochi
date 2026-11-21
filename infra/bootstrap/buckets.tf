@@ -48,7 +48,16 @@ resource "aws_s3_account_public_access_block" "this" {
 
 # External access findings (a trust or bucket policy that opens something to another
 # account) for the whole account. Free for this analyzer type.
+#
+# AWS allows one such analyzer per account and region. The account already had one,
+# left behind when the CloudFormation stack of a previous project was deleted, so it is
+# adopted under its own name: renaming an analyzer replaces it.
+import {
+  to = aws_accessanalyzer_analyzer.external
+  id = "ExternalAccess-6KkUmMA8mfdV"
+}
+
 resource "aws_accessanalyzer_analyzer" "external" {
-  analyzer_name = "twochi-external-access"
+  analyzer_name = "ExternalAccess-6KkUmMA8mfdV"
   type          = "ACCOUNT"
 }
