@@ -1,0 +1,18 @@
+[project]
+name = "twochi-worker"
+version = "0.1.0"
+description = "Queue and scheduler handlers with their wiring."
+requires-python = ">=3.14"
+dependencies = ["twochi-application", "twochi-domain", "twochi-agent", "twochi-data", "twochi-guardrails", "twochi-messaging"]
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+twochi-application = { workspace = true }
+twochi-domain = { workspace = true }
+twochi-agent = { workspace = true }
+twochi-data = { workspace = true }
+twochi-guardrails = { workspace = true }
+twochi-messaging = { workspace = true }

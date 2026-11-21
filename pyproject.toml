@@ -1,0 +1,131 @@
+[project]
+name = "twochi"
+version = "0.1.0"
+description = "Twochi monorepo root: Python workspace and shared tooling."
+requires-python = ">=3.14"
+dependencies = [
+  "twochi-domain",
+  "twochi-application",
+  "twochi-agent",
+  "twochi-data",
+  "twochi-guardrails",
+  "twochi-messaging",
+  "twochi-evals",
+  "twochi-api",
+  "twochi-worker",
+  "twochi-mcp",
+]
+
+[dependency-groups]
+dev = [
+  "ruff==0.17.5",
+  "pyright==1.1.414",
+  "import-linter==2.16",
+  "pytest==9.2.0",
+  "pytest-cov==7.1.0",
+  "hypothesis==6.170.15",
+]
+
+[tool.uv]
+package = false
+# Supply-chain cooldown: ignore releases newer than about a week (CI/CD e IaC, rule 7).
+exclude-newer = "2026-11-14T00:00:00Z"
+
+[tool.uv.workspace]
+members = ["packages/*", "apps/*"]
+
+[tool.uv.sources]
+twochi-domain = { workspace = true }
+twochi-application = { workspace = true }
+twochi-agent = { workspace = true }
+twochi-data = { workspace = true }
+twochi-guardrails = { workspace = true }
+twochi-messaging = { workspace = true }
+twochi-evals = { workspace = true }
+twochi-api = { workspace = true }
+twochi-worker = { workspace = true }
+twochi-mcp = { workspace = true }
+
+[tool.ruff]
+target-version = "py314"
+src = ["packages/*/src", "apps/*/src"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "I", "B", "UP", "SIM", "N", "S", "DTZ",
+  "ASYNC", "PT", "T20", "TID", "RUF",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# pytest relies on bare asserts.
+"**/tests/**" = ["S101"]
+
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.14"
+venvPath = "."
+venv = ".venv"
+include = ["packages", "apps"]
+exclude = ["**/node_modules", "**/.venv", "apps/web", "packages/api-client"]
+
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["packages", "apps"]
+addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra"]
+xfail_strict = true
+
+[tool.coverage.run]
+branch = true
+# The coverage gate covers only the pure domain (Arquitectura y convenciones, Tests).
+source = ["twochi_domain"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
+[tool.importlinter]
+root_packages = [
+  "twochi_domain", "twochi_application",
+  "twochi_agent", "twochi_data", "twochi_guardrails", "twochi_messaging",
+  "twochi_api", "twochi_worker", "twochi_mcp",
+]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Las dependencias apuntan hacia dentro"
+type = "layers"
+layers = [
+  "twochi_api | twochi_worker | twochi_mcp",
+  "twochi_agent | twochi_data | twochi_guardrails | twochi_messaging",
+  "twochi_application",
+  "twochi_domain",
+]
+
+[[tool.importlinter.contracts]]
+name = "El dominio solo usa la librería estándar"
+type = "forbidden"
+source_modules = ["twochi_domain"]
+# "*" matches every top-level module in the graph: the other twochi packages, every third-party
+# distribution (include_external_packages) and the standard library. The standard library modules
+# the domain may use are allowed below; anything else breaks the contract.
+forbidden_modules = ["*"]
+ignore_imports = [
+  "** -> __future__",
+  "** -> abc",
+  "** -> collections",
+  "** -> dataclasses",
+  "** -> datetime",
+  "** -> decimal",
+  "** -> enum",
+  "** -> functools",
+  "** -> itertools",
+  "** -> math",
+  "** -> operator",
+  "** -> re",
+  "** -> statistics",
+  "** -> types",
+  "** -> typing",
+  "** -> uuid",
+]
+unmatched_ignore_imports_alerting = "none"

@@ -1,0 +1,14 @@
+[project]
+name = "twochi-agent"
+version = "0.1.0"
+description = "Model and embeddings adapters."
+requires-python = ">=3.14"
+dependencies = ["twochi-application", "twochi-domain"]
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+twochi-application = { workspace = true }
+twochi-domain = { workspace = true }

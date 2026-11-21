@@ -10,3 +10,6 @@ dist/
 *.tfplan
 .env
 .env.*
+.hypothesis/
+htmlcov/
+coverage.xml
