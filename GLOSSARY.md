@@ -1,0 +1,100 @@
+# Twochi
+
+Juego de mascota virtual para una pareja: cada mascota es una caricatura cariñosa de una de las dos personas y la cuida la otra. Cada término lleva entre paréntesis su identificador en el código.
+
+## Personas
+
+**Pareja** (`Couple`):
+Las dos personas que juegan juntas. Es la unidad de aislamiento: nada de una pareja llega a otra.
+_Evitar_: grupo, cuenta
+
+**Persona representada** (`represents_user`):
+La persona de la pareja a la que caricaturiza una mascota.
+
+**Cuidador** (`caretaker`):
+La persona que cuida una mascota: siempre la pareja de la persona representada.
+_Evitar_: dueño
+
+**Ficha** (`Profile`):
+Lo que el juego sabe de una persona para que su mascota hable como ella: rasgos, gustos y ejemplos de voz.
+_Evitar_: perfil, persona
+
+**Rasgo** (`PersonaTrait`):
+Un dato atómico de la ficha, con su autor y su perspectiva: lo dice la propia persona o su pareja.
+
+## Mascota y cuidado
+
+**Mascota** (`Pet`):
+El avatar 3D de una persona de la pareja, con sus necesidades, su nivel y su voz.
+_Evitar_: avatar, personaje
+
+**Necesidad** (`Need`):
+Una de las cinco medidas de 0 a 100 que bajan con el tiempo real: hambre (`hunger`), energía (`energy`), higiene (`hygiene`), diversión (`fun`) y cariño (`affection`).
+_Evitar_: stat, barra
+
+**Despierta / dormida** (`asleep`):
+El estado de la mascota que decide a qué ritmo cambia cada necesidad.
+
+**Ánimo**:
+El estado visible de la mascota, sacado de la media de sus necesidades: feliz, normal, triste o enferma.
+_Evitar_: humor, felicidad
+
+**Acción de cuidado** (`CareAction`):
+Lo que hace el cuidador desde la interfaz para cambiar las necesidades: dar de comer, jugar, acariciar, bañar o dormir.
+_Evitar_: interacción
+
+**Acción** (`Action`):
+Un cambio de estado que el motor valida y aplica, venga de la interfaz o propuesto en el chat.
+
+**Afinidad** (`affinity`):
+Cuánto le gusta a una mascota un objeto del catálogo, de −2 a 2, según los gustos reales de su persona.
+
+**Evento** (`PetEvent`):
+El registro inmutable de algo que ocurrió a una mascota, del que salen el diario, las rachas y el álbum.
+
+## Conversación y memoria
+
+**Conversación** (`Conversation`):
+Una sesión de chat de una persona con una mascota.
+_Evitar_: hilo, sesión
+
+**Turno** (`Turn`):
+Una respuesta de la mascota en el chat: emoción, animación, texto y acciones propuestas.
+_Evitar_: mensaje de la IA
+
+**Acción propuesta** (`proposed_actions`):
+Una acción que la mascota sugiere en su turno y que el motor puede aplicar o rechazar.
+
+**Memoria** (`Memory`):
+Una frase atómica que la mascota recuerda de lo que le contaron, con quién la contó y quién puede verla.
+_Evitar_: recuerdo (reservado al álbum), contexto
+
+**Visibilidad** (`visibility`):
+Quién puede ver una memoria: solo quien la contó (`speaker`) o los dos (`couple`).
+
+**Modo espejo** (`mirror`):
+Chatear con tu propia mascota para comprobar que suena a ti. No escribe memorias ni cambia el juego.
+
+**Diario** (`DiaryEntry`):
+El resumen corto del día de una mascota, sin lo privado de quien lo contó.
+
+## Vínculo de pareja
+
+**Recado** (`Errand`):
+Un mensaje que una persona pide a su mascota que lleve a la de su pareja, entregado con la voz de la mascota.
+_Evitar_: mensaje, nota
+
+**Regalo**:
+Un objeto de la tienda que una persona envía a la mascota de su pareja.
+
+**Racha** (`streak`):
+Días seguidos en que los dos han cuidado a su mascota.
+
+**Monedas** (`coins`):
+La moneda del juego, que se gana cuidando, jugando y con misiones.
+
+**Aviso** (`notification`):
+Una notificación push programada, por ejemplo cuando una necesidad cruza un umbral.
+
+**Álbum** (`album`):
+Momentos destacados guardados: frases graciosas, primeros regalos.
