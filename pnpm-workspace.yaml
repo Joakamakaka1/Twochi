@@ -1,0 +1,6 @@
+packages:
+  - apps/web
+  - packages/api-client
+
+# Supply-chain cooldown: ignore npm releases younger than seven days, like exclude-newer in uv.
+minimumReleaseAge: 10080

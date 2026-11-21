@@ -1,0 +1,13 @@
+[project]
+name = "twochi-application"
+version = "0.1.0"
+description = "Use cases, ports and a test double for each port."
+requires-python = ">=3.14"
+dependencies = ["twochi-domain"]
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.sources]
+twochi-domain = { workspace = true }

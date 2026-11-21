@@ -1,0 +1,11 @@
+# Tool versions for local development and CI. See docs/adr/0001-pin-tool-versions-with-mise.md.
+[tools]
+python = "3.14.10"
+uv = "0.13.8"
+node = "26.13.1"
+pnpm = "12.21.0"
+just = "1.59.0"
+terraform = "1.17.2"
+tflint = "0.66.0"
+actionlint = "1.7.12"
+"pipx:zizmor" = "1.32.0"
