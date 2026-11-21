@@ -39,6 +39,8 @@ SENSITIVE_FILES = (
     "pyproject.toml",
     ".pre-commit-config.yaml",
     "apps/web/eslint.config.js",
+    # Login and aal2.
+    "apps/api/src/twochi_api/auth.py",
 )
 
 REQUIRED_SECTIONS = ("Evidencia", "Peligro de fusión")

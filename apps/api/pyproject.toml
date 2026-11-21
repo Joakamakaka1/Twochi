@@ -3,7 +3,18 @@ name = "twochi-api"
 version = "0.1.0"
 description = "HTTP entry point: routes, authentication and wiring."
 requires-python = ">=3.14"
-dependencies = ["twochi-application", "twochi-domain", "twochi-agent", "twochi-data", "twochi-guardrails", "twochi-messaging"]
+dependencies = [
+    "twochi-application",
+    "twochi-domain",
+    "twochi-agent",
+    "twochi-data",
+    "twochi-guardrails",
+    "twochi-messaging",
+    "fastapi>=0.162.7",
+    "pyjwt[crypto]>=2.15.1",
+    "pydantic-settings>=2.16.3",
+    "uvicorn>=0.54.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.13.8,<0.14"]
