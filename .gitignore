@@ -13,3 +13,5 @@ dist/
 .hypothesis/
 htmlcov/
 coverage.xml
+*.tsbuildinfo
+supabase/.temp/
