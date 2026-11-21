@@ -41,11 +41,13 @@ check-workflows:
     shellcheck="$(mise which shellcheck)" && actionlint -shellcheck "$shellcheck"
     zizmor .
 
-# Terraform: format, validate each root (modules through them) without a backend, and tflint.
+# Terraform: format, validate each root (modules through them) without a backend, and tflint;
+# then the tests of the CloudFront Functions.
 check-infra:
     if [ -d infra ]; then terraform fmt -check -recursive infra; fi
     for dir in infra/bootstrap infra/stack; do [ -f "$dir/versions.tf" ] || continue; terraform -chdir="$dir" init -backend=false -input=false -lockfile=readonly > /dev/null; terraform -chdir="$dir" validate; done
     if [ -d infra ]; then cd infra && tflint --init && tflint --recursive; fi
+    node --test "infra/**/*.test.mjs"
 
 # Build a Lambda zip for arm64 into dist/, named by the hash of its inputs, as CI does.
 package app="api":
