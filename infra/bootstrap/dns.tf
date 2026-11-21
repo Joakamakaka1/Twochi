@@ -11,3 +11,20 @@ resource "aws_route53_zone" "twochi" {
     prevent_destroy = true
   }
 }
+
+# jcvstro.dev has CAA records in Cloudflare that do not name Amazon. CAA lookups stop at
+# the closest name that has any, so this record lets ACM issue the CloudFront
+# certificate for the subzone (https://docs.aws.amazon.com/acm/latest/userguide/setup-caa.html).
+resource "aws_route53_record" "caa" {
+  zone_id = aws_route53_zone.twochi.zone_id
+  name    = aws_route53_zone.twochi.name
+  type    = "CAA"
+  ttl     = 3600
+  records = [
+    "0 issue \"amazon.com\"",
+    "0 issue \"amazontrust.com\"",
+    "0 issue \"awstrust.com\"",
+    "0 issue \"amazonaws.com\"",
+    "0 issuewild \";\"",
+  ]
+}
