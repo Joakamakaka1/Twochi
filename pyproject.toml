@@ -33,6 +33,8 @@ exclude-newer = "2026-11-14T00:00:00Z"
 
 [tool.uv.workspace]
 members = ["packages/*", "apps/*"]
+# TypeScript workspaces live alongside the Python ones.
+exclude = ["packages/api-client", "apps/web"]
 
 [tool.uv.sources]
 twochi-domain = { workspace = true }
