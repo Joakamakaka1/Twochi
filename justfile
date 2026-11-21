@@ -39,10 +39,10 @@ check-workflows:
     actionlint
     zizmor .
 
-# Terraform: format, validate each root without a backend, and tflint. No-op without infra/.
+# Terraform: format, validate each root (modules through them) without a backend, and tflint.
 check-infra:
     if [ -d infra ]; then terraform fmt -check -recursive infra; fi
-    for dir in infra/*/; do [ -d "$dir" ] || continue; terraform -chdir="$dir" init -backend=false -input=false -lockfile=readonly > /dev/null; terraform -chdir="$dir" validate; done
+    for dir in infra/bootstrap infra/stack; do [ -f "$dir/versions.tf" ] || continue; terraform -chdir="$dir" init -backend=false -input=false -lockfile=readonly > /dev/null; terraform -chdir="$dir" validate; done
     if [ -d infra ]; then cd infra && tflint --init && tflint --recursive; fi
 
 # Format and autofix.
