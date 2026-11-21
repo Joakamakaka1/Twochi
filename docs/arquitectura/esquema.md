@@ -84,7 +84,7 @@ RLS solo es una red de seguridad real si la API no entra con un rol que se la sa
 | Worker (Lambda) | Igual | `twochi_worker`, propio | Barridos entre parejas, memorias, resumen de sesión y diario, con políticas propias en las tablas que usa y sin `BYPASSRLS` |
 | Migraciones (CI) | Conexión de sesión | `postgres` | Cambios de esquema |
 | Tú, como admin | Supabase Studio | `postgres` | Todo |
-| MCP de administración, en tu PC | Postgres por el pooler, modo transacción | twochi_admin, propio | Solo lectura sobre app, con contenido. Exige la aceptación expresa de tu pareja |
+| MCP de administración, en local | Postgres por el pooler, modo transacción | twochi_admin, propio | Solo lectura sobre app, con contenido |
 
 ### La API y RLS: dos opciones
 - A, autorización solo en código. El rol de la API se salta RLS. Cada función del repositorio recibe el `couple_id` del JWT verificado y un test comprueba que ninguna consulta lo omite. Es lo que implica hoy el documento.
@@ -94,7 +94,7 @@ La opción B son unas diez líneas en el gestor de transacciones. Como todo es `
 
 ### Privacidad entre los dos: políticas por persona
 
-Decidido el 21 nov. Con una sola pareja real, la política por `couple_id` no separa nada: la frontera que importa es persona a persona. Cinco tablas guardan contenido privado y llevan además una política por persona.
+Decidido el 21 nov. La política por `couple_id` no separa a las dos personas de una pareja: la frontera que importa es persona a persona. Cinco tablas guardan contenido privado y llevan además una política por persona.
 
 | Tabla | Quién puede leer la fila |
 | --- | --- |

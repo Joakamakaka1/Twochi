@@ -5,7 +5,7 @@ computed on read from the hourly rates, so no job updates needs in the backgroun
 """
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from types import MappingProxyType
 
@@ -83,5 +83,5 @@ def current_value(
 
 
 def _require_utc(moment: datetime) -> None:
-    if moment.utcoffset() != timedelta(0):
+    if moment.tzinfo is not UTC:
         raise NonUtcDatetimeError(moment)

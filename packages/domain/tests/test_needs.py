@@ -123,3 +123,16 @@ def test_time_passing_awake_never_raises_a_need(
     after = current_value(need, state, now=T0 + later, asleep=False)
 
     assert after <= before <= value
+
+
+@given(
+    need=st.sampled_from([n for n in Need if n is not Need.ENERGY]),
+    value=values,
+    passed=elapsed,
+)
+def test_time_passing_asleep_raises_only_energy(
+    need: Need, value: float, passed: timedelta
+) -> None:
+    state = NeedState(value=value, updated_at=T0)
+
+    assert current_value(need, state, now=T0 + passed, asleep=True) <= value

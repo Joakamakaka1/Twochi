@@ -91,6 +91,7 @@ root_packages = [
   "twochi_domain", "twochi_application",
   "twochi_agent", "twochi_data", "twochi_guardrails", "twochi_messaging",
   "twochi_api", "twochi_worker", "twochi_mcp",
+  "twochi_evals",
 ]
 include_external_packages = true
 
@@ -131,3 +132,13 @@ ignore_imports = [
   "** -> uuid",
 ]
 unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "Nada de producción importa las evals"
+type = "forbidden"
+source_modules = [
+  "twochi_domain", "twochi_application",
+  "twochi_agent", "twochi_data", "twochi_guardrails", "twochi_messaging",
+  "twochi_api", "twochi_worker", "twochi_mcp",
+]
+forbidden_modules = ["twochi_evals"]

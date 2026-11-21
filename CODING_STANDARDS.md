@@ -23,6 +23,7 @@ Destilado de [Arquitectura y convenciones](docs/arquitectura/arquitectura-y-conv
 - Lo que es regla va al dominio aunque hable de IA: función pura con tests, no frase del prompt. [→](docs/arquitectura/arquitectura-y-convenciones.md#capas-y-paquetes)
 - El modelo propone y el código decide: ninguna regla de juego, privacidad o gasto vive solo en un prompt. [→](docs/arquitectura/arquitectura-y-convenciones.md#principios)
 - El dominio es determinista: el reloj y el azar entran por parámetro. [→](docs/arquitectura/arquitectura-y-convenciones.md#principios)
+- El dominio solo importa los módulos de la librería estándar listados en el contrato de `pyproject.toml` (sin E/S, reloj ni azar). Añadir uno es una línea en ese contrato con su motivo en el PR.
 - Lo esperable es un valor de retorno (`Rejected(reason)`); lo inesperado, una excepción que hereda de `TwochiError`. [→](docs/arquitectura/arquitectura-y-convenciones.md#convenciones-de-python)
 - Se valida en el borde y se confía dentro: la entrada se convierte una vez a tipos del dominio. [→](docs/arquitectura/arquitectura-y-convenciones.md#principios)
 - Una ruta, un caso de uso: la ruta traduce, llama y traduce, sin lógica propia. [→](docs/arquitectura/arquitectura-y-convenciones.md#capas-y-paquetes)

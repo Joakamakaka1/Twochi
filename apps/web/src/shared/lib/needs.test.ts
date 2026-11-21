@@ -23,4 +23,9 @@ describe("needValueAt", () => {
   it("keeps the stored value when the device clock is behind the server", () => {
     expect(needValueAt(reading(50, -6), at("2026-11-21T11:00:00Z"))).toBe(50);
   });
+
+  it("keeps the API value when the timestamp cannot be read", () => {
+    const unreadable = { ...reading(40, -6), updated_at: "not a date" };
+    expect(needValueAt(unreadable, at("2026-11-21T15:00:00Z"))).toBe(40);
+  });
 });

@@ -16,17 +16,37 @@ function restrictImports(files, patterns) {
   return { files, rules: { "no-restricted-imports": ["error", { patterns }] } };
 }
 
-function layerImports(layer) {
+function upwardImports(layer) {
   const above = LAYERS.slice(0, LAYERS.indexOf(layer));
-  const patterns = [deepImport];
-  if (above.length > 0) {
-    patterns.push({
+  if (above.length === 0) return [];
+  return [
+    {
       regex: String.raw`^(\.\./)+(${above.join("|")})(/|$)`,
       message: `${layer} cannot import ${above.join(" or ")}: imports go app -> features -> scene -> shared.`,
-    });
-  }
-  return restrictImports([`src/${layer}/**/*.{ts,tsx}`], patterns);
+    },
+  ];
 }
+
+function layerImports(layer) {
+  return restrictImports([`src/${layer}/**/*.{ts,tsx}`], [deepImport, ...upwardImports(layer)]);
+}
+
+// A feature never imports another one: what they share goes down to shared or is composed in app.
+// From a file N folders deep inside src/features/<name>/, climbing N levels and descending into
+// anything is a sibling feature (or the features barrel).
+const crossFeatureImports = [1, 2, 3, 4].map((depth) =>
+  restrictImports(
+    [`src/features/*/${"*/".repeat(depth - 1)}*.{ts,tsx}`],
+    [
+      deepImport,
+      {
+        regex: String.raw`^(\.\./){${depth}}[^.]`,
+        message: "A feature cannot import another feature: move the shared part to shared or compose it in app.",
+      },
+      ...upwardImports("features"),
+    ],
+  ),
+);
 
 export default defineConfig([
   globalIgnores(["dist"]),
@@ -45,4 +65,5 @@ export default defineConfig([
   // Entry files at the root of src, such as main.tsx.
   restrictImports(["src/*.{ts,tsx}"], [deepImport]),
   ...LAYERS.map(layerImports),
+  ...crossFeatureImports,
 ]);
