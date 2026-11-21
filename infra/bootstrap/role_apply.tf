@@ -140,12 +140,31 @@ data "aws_iam_policy_document" "apply_stack" {
   }
 
   # Detection belongs to bootstrap (TWO-19): the stack cannot switch GuardDuty off,
-  # archive its findings or hand it to another account.
+  # archive its findings or hand it to another account. Every GuardDuty write, by
+  # verb; a NotAction here would deny every other service too.
   statement {
-    sid         = "LeaveDetectionAlone"
-    effect      = "Deny"
-    not_actions = ["guardduty:Get*", "guardduty:List*", "guardduty:Describe*"]
-    resources   = ["*"]
+    sid    = "LeaveDetectionAlone"
+    effect = "Deny"
+    actions = [
+      "guardduty:Accept*",
+      "guardduty:Archive*",
+      "guardduty:Associate*",
+      "guardduty:Create*",
+      "guardduty:Decline*",
+      "guardduty:Delete*",
+      "guardduty:Disable*",
+      "guardduty:Disassociate*",
+      "guardduty:Enable*",
+      "guardduty:Invite*",
+      "guardduty:Send*",
+      "guardduty:Start*",
+      "guardduty:Stop*",
+      "guardduty:Tag*",
+      "guardduty:Unarchive*",
+      "guardduty:Untag*",
+      "guardduty:Update*",
+    ]
+    resources = ["*"]
   }
 
   # Function URLs only with AWS_IAM: the edge signs with OAC.
