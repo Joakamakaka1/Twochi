@@ -1,4 +1,4 @@
-# twochi-plan: read-only, for `terraform plan -lock=false` on pull requests opened from
+# twochi-plan: reads the stack's services only (ci_read.tf), for `terraform plan -lock=false` on pull requests opened from
 # branches of this repository. Fork PRs never get an OIDC token for it.
 
 resource "aws_iam_role" "plan" {
@@ -8,9 +8,9 @@ resource "aws_iam_role" "plan" {
   max_session_duration = 3600
 }
 
-resource "aws_iam_role_policy_attachment" "plan_read_only" {
+resource "aws_iam_role_policy_attachment" "plan_read" {
   role       = aws_iam_role.plan.name
-  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+  policy_arn = aws_iam_policy.ci_read.arn
 }
 
 resource "aws_iam_role_policy" "plan_guardrails" {

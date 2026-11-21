@@ -107,8 +107,21 @@ data "aws_iam_policy_document" "ci_guardrails" {
       "logs:StartQuery",
       "logs:StartLiveTail",
       "logs:Unmask",
+      "logs:ListAnomalies",
       "sqs:ReceiveMessage",
+      "iam:GetCredentialReport",
     ]
     resources = ["*"]
+  }
+
+  # Even the key names of real data stay private.
+  statement {
+    sid     = "DenyListingRealData"
+    effect  = "Deny"
+    actions = ["s3:ListBucket", "s3:ListBucketVersions"]
+    resources = [
+      "arn:aws:s3:::${local.backups_bucket}",
+      "arn:aws:s3:::${local.dataset_bucket}",
+    ]
   }
 }

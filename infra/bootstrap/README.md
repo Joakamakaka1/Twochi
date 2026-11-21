@@ -10,11 +10,12 @@ Lo que debe existir antes de que corra el pipeline y lo que no debe estar al alc
 | `twochi-dataset-<cuenta>` | Dataset dorado y muestras de estilo: datos reales, nunca en git |
 | `twochi.jcvstro.dev` en Route 53 | Zona del dominio, con un CAA que autoriza a ACM, delegada desde Cloudflare. Ver [ADR 0002](../../docs/adr/0002-route53-subzone-delegated-from-cloudflare.md) |
 | Proveedor OIDC | GitHub Actions entra sin claves de AWS |
-| `twochi-plan` | `ReadOnlyAccess` para `terraform plan` en los PR. Confía en `pull_request` del `sub` inmutable del repositorio |
+| `twochi-ci-read` | Lecturas de los servicios del stack, y nada más. Sustituye a `ReadOnlyAccess`, que también lee contacto, impuestos, pagos, facturas y CloudTrail de la cuenta |
+| `twochi-plan` | `twochi-ci-read` para `terraform plan -lock=false` en los PR. Confía en `pull_request` del `sub` inmutable del repositorio |
 | `twochi-apply` | Escribe el stack, solo desde el entorno `prod` (tu aprobación, solo desde `main`) |
 | `twochi-workload-boundary` | Techo de permisos de cada rol que crea el stack |
 | Bloqueo de acceso público de la cuenta | Ningún bucket puede hacerse público, diga lo que diga una política |
-| `twochi-external-access` | Access Analyzer: avisa si una política abre algo a otra cuenta |
+| `twochi-external-access` | Access Analyzer: detecta si una política abre algo a otra cuenta. Sus avisos por correo llegan con TWO-19 |
 
 Los cuatro buckets usan el módulo `infra/modules/private_bucket`: privados, cifrados, solo por TLS y con `prevent_destroy`.
 
@@ -22,8 +23,14 @@ Los cuatro buckets usan el módulo `infra/modules/private_bucket`: privados, cif
 
 Los logs de Actions son públicos y un `plan` ejecuta el código del PR, así que lo que estos roles puedan leer puede acabar publicado.
 
-- Los dos: solo `eu-west-1`, `us-east-1` y `eu-north-1` (GuardDuty, en todas); ningún parámetro de SSM, secreto ni `kms:Decrypt`; ningún objeto fuera de los buckets de estado y de artefactos; ni líneas de log ni mensajes de SQS.
-- `twochi-apply`, además: no asume ningún rol, no toca `bootstrap` ni la configuración de sus buckets, no escribe el estado de `bootstrap` ni los datos, no purga versiones y no borra la zona, GuardDuty ni Access Analyzer. Los roles que crea llevan el límite de permisos.
+- Los dos: solo leen los servicios del stack; solo `eu-west-1`, `us-east-1` y `eu-north-1` (GuardDuty, en todas); ningún parámetro de SSM, secreto ni `kms:Decrypt`; ningún objeto fuera de los buckets de estado y de artefactos, y ni siquiera la lista de claves de backups y dataset; ni líneas de log, anomalías, mensajes de SQS ni el informe de credenciales.
+- `twochi-apply`, además:
+  - no asume ningún rol ni toca el IAM de `bootstrap`, salvo para leerlo;
+  - en los buckets de `bootstrap` solo lee, escribe y borra objetos (nunca en `bootstrap/*` ni en los de datos) y lista;
+  - no escribe nada de GuardDuty (TWO-19) ni borra la zona o Access Analyzer;
+  - no crea Function URL públicas, no da permiso de invocación a nada que no sea CloudFront, EventBridge, Scheduler o SNS, no saca logs a otra cuenta, no abre colas ni temas a otras cuentas y solo suscribe correos;
+  - no cambia los registros CAA, NS ni DS de la zona.
+- Los roles que crea el stack llevan el límite de permisos: solo el código que corre en una Lambda lee parámetros u objetos. Un rol cuya confianza se abriera a otra cuenta no obtendría eso, y Access Analyzer lo detecta.
 - El control de verdad es tu aprobación en `prod`: quien aplica cambia lo que corre en producción.
 
 ## Primer apply

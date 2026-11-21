@@ -74,6 +74,30 @@ data "aws_iam_policy_document" "workload_boundary" {
     resources = ["arn:aws:s3:::twochi-*/*"]
   }
 
+  # Only code running in a Lambda reads secrets or objects: Lambda adds this key to the
+  # calls a function makes. A workload role whose trust were widened to an OIDC subject
+  # or another account would get sessions without it, and with them none of that. Left
+  # out on purpose: sqs:ReceiveMessage, which the SQS poller makes for the function, and
+  # kms:Decrypt, which SSM makes on its behalf; without GetParameter there is nothing to
+  # decrypt. To validate on the first deploy that the api still reads its parameters.
+  statement {
+    sid    = "OnlyFromInsideALambda"
+    effect = "Deny"
+    actions = [
+      "ssm:GetParameter",
+      "ssm:GetParameters",
+      "s3:GetObject",
+      "s3:PutObject",
+    ]
+    resources = ["*"]
+
+    condition {
+      test     = "Null"
+      variable = "lambda:SourceFunctionArn"
+      values   = ["true"]
+    }
+  }
+
   # No workload touches state, artifacts, backups or the dataset: those belong to the
   # pipeline and to people.
   statement {
