@@ -1,0 +1,230 @@
+# Deploy to prod from main (CI/CD e IaC, «Plan y apply» and «Orden en main, prueba de
+# humo y vuelta atrás»): build the api zip, upload it, compute a fresh plan, apply that
+# file in the `prod` environment and smoke-test /api/health without crossing the edge.
+# Migrations and the front join this workflow with their own tickets.
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  # Deploys whatever main holds, even if nothing changed since the last deploy.
+  workflow_dispatch:
+
+permissions: {}
+
+# One deploy at a time and never cancelled halfway. A newer push waits; if several
+# pile up, only the latest stays queued and it deploys everything merged since.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+env:
+  MISE_VERSION: "2026.9.18"
+  MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+  UV_MALWARE_CHECK: "1"
+
+jobs:
+  # Deploys when something the stack reads changed since the last successful prod
+  # deployment, which GitHub records; with no such deployment yet, it deploys.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: read
+    outputs:
+      deploy: ${{ steps.decide.outputs.deploy }}
+    steps:
+      - id: ready
+        env:
+          STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          ARTIFACTS_BUCKET: ${{ secrets.TF_ARTIFACTS_BUCKET }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+        run: |
+          if [ -n "$STATE_BUCKET" ] && [ -n "$ARTIFACTS_BUCKET" ] && [ -n "$SUPABASE_URL" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=deploy skipped::TF_STATE_BUCKET, TF_ARTIFACTS_BUCKET or the SUPABASE_URL variable is missing: bootstrap is not applied yet (TWO-9)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.ready.outputs.ok == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - if: steps.ready.outputs.ok == 'true'
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          deployed=""
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/deployments?environment=prod&per_page=100" --jq '.[].id'); do
+            state=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id/statuses?per_page=1" --jq '.[0].state // ""')
+            if [ "$state" = "success" ]; then
+              deployed=$(gh api "repos/$GITHUB_REPOSITORY/deployments/$id" --jq '.sha')
+              break
+            fi
+          done
+          if [ -z "$deployed" ] || ! git merge-base --is-ancestor "$deployed" HEAD 2>/dev/null; then
+            echo "No earlier successful deploy in this history: deploying."
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Last successful deploy: $deployed"
+          # Tests never reach a zip; the rest is what the stack plan reads.
+          stack='^(infra/stack/|infra/modules/|apps/(api|worker)/|packages/|uv\.lock$|\.python-version$|\.github/workflows/deploy\.yml$|\.github/scripts/(lambda_package|plan_check)\.py$)'
+          if git -c core.quotePath=false diff --name-only --no-renames "$deployed" HEAD \
+              | grep -v '/tests/' | grep -Eq "$stack"; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Nothing the stack reads changed since then."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Builds without any AWS role: installing packages never runs with deploy rights.
+  build:
+    needs: changes
+    if: needs.changes.outputs.deploy == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      api-key: ${{ steps.package.outputs.key }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: python uv
+      - id: package
+        run: |
+          python .github/scripts/lambda_package.py build api "$RUNNER_TEMP/package"
+          echo "key=$(python .github/scripts/lambda_package.py key api)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: api-package
+          path: ${{ runner.temp }}/package/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # Waits for the required reviewer; its secrets exist only here.
+    environment: prod
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - env:
+          ROLE_ARN: ${{ secrets.AWS_APPLY_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE_ARN" ]; then
+            echo "::error title=deploy::AWS_APPLY_ROLE_ARN is missing from the prod environment secrets."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: python terraform
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: api-package
+          path: ${{ runner.temp }}/package
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_APPLY_ROLE_ARN }}
+          role-session-name: twochi-apply-${{ github.run_id }}
+          aws-region: eu-west-1
+          mask-aws-account-id: true
+      # Same key, same code: an existing zip is never overwritten.
+      - env:
+          BUCKET: ${{ secrets.TF_ARTIFACTS_BUCKET }}
+          KEY: ${{ needs.build.outputs.api-key }}
+        run: |
+          zip="$RUNNER_TEMP/package/${KEY#api/}"
+          test -f "$zip"
+          if aws s3api head-object --bucket "$BUCKET" --key "$KEY" > /dev/null 2>&1; then
+            echo "Already uploaded: $KEY"
+          else
+            aws s3 cp "$zip" "s3://$BUCKET/$KEY" --only-show-errors
+            echo "Uploaded: $KEY"
+          fi
+      # A fresh plan on main, saved and applied as is; the PR's plan is never reused.
+      - working-directory: infra/stack
+        env:
+          STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+          TF_VAR_api_package_key: ${{ needs.build.outputs.api-key }}
+          TF_VAR_supabase_url: ${{ vars.SUPABASE_URL }}
+        run: |
+          terraform init -input=false -lockfile=readonly -backend-config="bucket=$STATE_BUCKET"
+          terraform plan -input=false -out="$RUNNER_TEMP/stack.tfplan"
+          terraform show -json "$RUNNER_TEMP/stack.tfplan" > "$RUNNER_TEMP/plan.json"
+      - run: |
+          status=0
+          python .github/scripts/plan_check.py "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/summary.md" || status=$?
+          cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          rm "$RUNNER_TEMP/plan.json"
+          exit "$status"
+      - working-directory: infra/stack
+        run: terraform apply -input=false "$RUNNER_TEMP/stack.tfplan"
+      # The runner is outside the allowed countries, so the smoke test calls the
+      # function directly with a Function URL event instead of crossing the edge.
+      - working-directory: infra/stack
+        run: |
+          function=$(terraform output -raw api_function_name)
+          cat > "$RUNNER_TEMP/health-event.json" <<'EVENT'
+          {
+            "version": "2.0",
+            "routeKey": "$default",
+            "rawPath": "/api/health",
+            "rawQueryString": "",
+            "headers": {"host": "smoke.invalid", "user-agent": "twochi-smoke"},
+            "requestContext": {
+              "accountId": "anonymous",
+              "apiId": "smoke",
+              "domainName": "smoke.invalid",
+              "domainPrefix": "smoke",
+              "http": {
+                "method": "GET",
+                "path": "/api/health",
+                "protocol": "HTTP/1.1",
+                "sourceIp": "127.0.0.1",
+                "userAgent": "twochi-smoke"
+              },
+              "requestId": "smoke",
+              "routeKey": "$default",
+              "stage": "$default",
+              "time": "01/Jan/2026:00:00:00 +0000",
+              "timeEpoch": 1767225600000
+            },
+            "isBase64Encoded": false
+          }
+          EVENT
+          for attempt in 1 2 3; do
+            if aws lambda invoke --function-name "$function" \
+                --cli-binary-format raw-in-base64-out \
+                --payload "file://$RUNNER_TEMP/health-event.json" \
+                "$RUNNER_TEMP/health.json" > "$RUNNER_TEMP/invoke.json" \
+              && ! jq -e 'has("FunctionError")' "$RUNNER_TEMP/invoke.json" > /dev/null \
+              && jq -e '.statusCode == 200 and ((if .isBase64Encoded then .body | @base64d else .body end) | fromjson | .status == "ok")' "$RUNNER_TEMP/health.json" > /dev/null; then
+              echo "Smoke test passed: /api/health answered ok."
+              exit 0
+            fi
+            echo "Attempt $attempt failed."
+            sleep 10
+          done
+          echo "::error title=smoke test::/api/health did not answer ok. Fix with a git revert; the previous zip is still in the artifacts bucket."
+          exit 1
