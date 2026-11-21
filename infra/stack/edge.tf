@@ -145,8 +145,10 @@ resource "aws_cloudfront_distribution" "edge" {
   default_root_object = "index.html"
   http_version        = "http2and3"
   is_ipv6_enabled     = true
-  price_class         = "PriceClass_100"
-  web_acl_id          = aws_wafv2_web_acl.edge.arn
+  # Flat-rate plans do not support price classes: subscribing sets PriceClass_All, and
+  # the plan's price is the same wherever the content is served from.
+  price_class = "PriceClass_All"
+  web_acl_id  = aws_wafv2_web_acl.edge.arn
 
   origin {
     origin_id                = "web"

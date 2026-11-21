@@ -13,5 +13,5 @@ El stack de `prod`. Hoy: el borde (CloudFront, WAF, certificado y registros DNS)
 - Solo despliega si algo que lee el stack cambió desde el último despliegue con éxito en `prod`; `workflow_dispatch` despliega igualmente.
 - Sin los secretos `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET` y `TF_ARTIFACTS_BUCKET`, el secreto de entorno `AWS_APPLY_ROLE_ARN` y la variable `SUPABASE_URL`, los dos jobs se saltan con un aviso.
 - En local, `just package api` deja el mismo zip en `dist/`.
-- Tras el primer `apply`, la suscripción al plan flat-rate Free es manual (TWO-15): el recurso de Terraform aún no existe.
+- La distribución está suscrita al plan flat-rate Free desde el 2026-11-21 (TWO-15). La suscripción se hizo a mano porque el recurso de Terraform aún no existe. Ese plan no admite clases de precio, así que `price_class` es `PriceClass_All`: si Terraform pidiera otra, revertiría lo que puso la suscripción.
 - Cada rol que se cree aquí lleva `permissions_boundary = local.workload_boundary_arn`; sin él, `twochi-apply` no puede crearlo.
