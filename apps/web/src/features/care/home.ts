@@ -1,5 +1,10 @@
+import { ApiError } from "../../shared";
 import type { ApiClient, Home } from "../../shared";
 
-export function readHome(_api: ApiClient): Promise<Home> {
-  return Promise.resolve({ pet: null });
+export const HOME_KEY = ["home"] as const;
+
+export async function readHome(api: ApiClient): Promise<Home> {
+  const { data, response } = await api.GET("/api/homes/me");
+  if (data === undefined) throw new ApiError(response.status);
+  return data;
 }
