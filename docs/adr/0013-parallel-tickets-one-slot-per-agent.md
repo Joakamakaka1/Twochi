@@ -114,6 +114,7 @@ El mismo 22 de noviembre, con dos tickets reales de la frontera lanzados a la ve
 ## Consecuencias
 
 - Un agente que olvide exportar las tres variables prueba contra la base de la carpeta principal. Hasta TWO-43, el encargo de cada agente las lleva escritas, y el orquestador comprueba el seed de la carpeta principal al cerrar la tanda.
+- Un hueco que pierde su `config.toml` reescrito (un `checkout` o un `merge` que traiga el de `main`) vuelve a apuntar a la instancia `twochi`: sus tests escribirían en la base de la carpeta principal y `check-dump` la reconstruiría. Lo encontró la revisión de TWO-43, que añade la comprobación antes de tocar ninguna base; hasta que se fusione, el orquestador comprueba `project_id` en cada hueco antes de lanzar un agente.
 - Un ticket que necesita cambiar `supabase/config.toml` no puede ir en un hueco: va en serie, en la carpeta principal.
 - `skip-worktree` esconde también un cambio legítimo de ese fichero que llegue de `main`: un `merge` que lo toque falla con un aviso, y el hueco se rehace.
 - Las instancias de los huecos quedan arrancadas hasta que alguien las para. El orquestador las para al cerrar la sesión.
