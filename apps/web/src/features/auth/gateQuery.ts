@@ -27,20 +27,26 @@ export function gateQuery(auth: AuthPort, queryClient: QueryClient) {
 }
 
 // A change of session is a signal, as a Realtime event is: it only invalidates. The API
-// refusing the token is the same signal, and can come first: another tab signed in
-// again, or a refresh failed, and Auth's event has not reached this tab yet.
+// refusing the token, on a read or on a write, is the same signal, and can come first:
+// another tab signed in again, or a refresh failed, and Auth's event has not reached
+// this tab yet.
 export function followAuth(auth: AuthPort, queryClient: QueryClient): () => void {
   const resolveAgain = () => {
     void queryClient.invalidateQueries({ queryKey: GATE_KEY });
   };
   const stopAuth = auth.onChange(resolveAgain);
-  const stopApi = queryClient.getQueryCache().subscribe((event) => {
+  const stopReads = queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== "updated" || event.action.type !== "error") return;
+    if (isAuthFailure(event.action.error)) resolveAgain();
+  });
+  const stopWrites = queryClient.getMutationCache().subscribe((event) => {
     if (event.type !== "updated" || event.action.type !== "error") return;
     if (isAuthFailure(event.action.error)) resolveAgain();
   });
   return () => {
     stopAuth();
-    stopApi();
+    stopReads();
+    stopWrites();
   };
 }
 

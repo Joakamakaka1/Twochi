@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { useApi } from "../../shared";
 import type { CareAction, Pet } from "../../shared";
-import { careActionMutation, careOutcomeText, careTap } from "./careActions";
+import { careActionMutation, careFailureText, careOutcomeText, careTap } from "./careActions";
 import { homeQuery, refreshHomeOnForeground } from "./home";
 
 export function useHome() {
@@ -38,7 +38,7 @@ export function useCareActions(petId: Pet["id"]) {
       if (mutation.variables !== undefined) mutation.mutate(mutation.variables);
     },
     isPending: mutation.isPending,
-    failed: mutation.isError,
+    failure: careFailureText(mutation.error),
     rejection: careOutcomeText(mutation.data),
   };
 }

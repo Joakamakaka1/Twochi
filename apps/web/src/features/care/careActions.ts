@@ -1,7 +1,7 @@
 import { mutationOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { apiError, retryApiWrite, texts } from "../../shared";
+import { apiError, isAuthFailure, retryApiWrite, texts } from "../../shared";
 import type { ApiClient, CareAction, CareActionResult, Home, Pet } from "../../shared";
 import { HOME_KEY } from "./home";
 
@@ -45,6 +45,7 @@ export function careOutcomeText(result: CareActionResult | undefined): string | 
   return texts.care.rejections[result.rejection];
 }
 
+/** What Casa says when a tap failed: nothing after an auth failure, as the gate takes over. */
 export function careFailureText(error: unknown): string | null {
-  return error === null ? null : texts.failure;
+  return error === null || isAuthFailure(error) ? null : texts.failure;
 }

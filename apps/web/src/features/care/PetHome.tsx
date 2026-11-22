@@ -68,9 +68,9 @@ export function PetHome({ pet }: { pet: Pet }) {
       </section>
 
       <p role="status">{care.rejection}</p>
-      {care.failed && (
+      {care.failure !== null && (
         <>
-          <p role="alert">{texts.failure}</p>
+          <p role="alert">{care.failure}</p>
           <button type="button" onClick={care.retry}>
             {texts.retry}
           </button>
