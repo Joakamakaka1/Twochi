@@ -1,5 +1,6 @@
 export { needValueAt } from "./lib/needs";
 export type { NeedReading } from "./lib/needs";
+export { onForeground } from "./lib/foreground";
 export type { VisibilitySource } from "./lib/foreground";
 export {
   ApiError,
