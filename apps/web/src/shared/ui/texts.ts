@@ -26,6 +26,24 @@ export const texts = {
   care: {
     caringFor: (petName: string) => `Cuidas a ${petName}`,
     petArrivesWithPartner: "Tu mascota llegará cuando tu pareja se una.",
+    moods: { happy: "Feliz", normal: "Normal", sad: "Triste", sick: "Enferma" },
+    moodIs: (mood: string) => `Ánimo: ${mood}`,
+    asleep: "Está dormida",
+    awake: "Está despierta",
+    needsTitle: "Necesidades",
+    needs: { hunger: "Hambre", energy: "Energía", hygiene: "Higiene", fun: "Diversión", affection: "Cariño" },
+    // Next to a need under 30: the pet asks for it.
+    asksFor: "la pide",
+    roomsTitle: "Habitaciones",
+    rooms: { kitchen: "Cocina", bathroom: "Baño", bedroom: "Dormitorio", living_room: "Salón" },
+    actions: {
+      feed: "Dar de comer",
+      play: "Jugar",
+      pet: "Acariciar",
+      bathe: "Bañar",
+      sleep: "Dormir",
+      wake: "Despertar",
+    },
     // Why the engine refused a care action (GLOSSARY.md, «Rechazo»).
     rejections: {
       not_caretaker: "Esta mascota la cuida tu pareja.",
