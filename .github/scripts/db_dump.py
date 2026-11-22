@@ -212,16 +212,27 @@ def dump_database(settings: Settings, out: Path) -> None:
         "PGSSLROOTCERT": "/ca/root.pem",
         "PGAPPNAME": "twochi-backup",
     }
+    run_dump_script(pg, out, ["-v", f"{SUPABASE_CA}:/ca/root.pem:ro"])
+
+
+def run_dump_script(
+    pg: Mapping[str, str], out: Path, docker_options: Sequence[str] = ()
+) -> None:
+    """supabase_dump.sh in the pinned image, connected by the PG* variables in `pg`.
+
+    Also what `just check-dump` runs against the local database (TWO-41), so the check
+    and production share this one invocation.
+    """
     args = ["docker", "run", "--rm"]
     for name in pg:
         args += ["-e", name]
     args += [
-        "-v", f"{SUPABASE_CA}:/ca/root.pem:ro",
+        *docker_options,
         "-v", f"{DUMP_SCRIPT}:/dump.sh:ro",
         "-v", f"{out}:/out",
         DUMP_IMAGE, "bash", "/dump.sh",
     ]  # fmt: skip
-    result = subprocess.run(args, env=os.environ | pg, check=False)  # noqa: S603
+    result = subprocess.run(args, env=os.environ | dict(pg), check=False)  # noqa: S603
     if result.returncode != 0:
         raise DumpError(f"pg_dump failed with exit code {result.returncode}.")
     for name in DUMP_FILES:
