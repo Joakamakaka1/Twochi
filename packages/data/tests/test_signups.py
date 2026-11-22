@@ -139,6 +139,20 @@ async def test_the_hook_refuses_a_password_signup_to_a_google_persons_email(
     assert result == {"error": {"http_code": 403, "message": "Signups are closed."}}
 
 
+async def test_the_hook_refuses_even_the_test_couple_signing_up_by_password(
+    couples: Couples,
+) -> None:
+    listed = await allow_couple(couples)
+    await couples.admin.execute(
+        "update app.signup_allowlist set provider = 'email' where couple_id = $1",
+        listed.couple_id,
+    )
+
+    result = await before_user_created(listed.alice, provider="email")
+
+    assert result == {"error": {"http_code": 403, "message": "Signups are closed."}}
+
+
 async def test_a_signup_another_way_than_listed_gets_no_profile(
     couples: Couples,
 ) -> None:

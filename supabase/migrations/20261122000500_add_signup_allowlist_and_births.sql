@@ -39,9 +39,10 @@ create policy auth_admin_reads_emails on app.signup_allowlist
   using (true);
 
 -- Before User Created Hook: Supabase Auth runs it as supabase_auth_admin before a person
--- signs up (users created through the admin API skip it). `{}` lets the signup through;
--- an error object rejects it. The message never names the email, so a rejection leaks
--- nothing about who is on the list.
+-- signs up. Only Google signups pass: the test couple's `email` rows are created through
+-- the admin API, which skips this hook, so nobody legitimate signs up with a password.
+-- `{}` lets the signup through; an error object rejects it. The message never names the
+-- email, so a rejection leaks nothing about who is on the list.
 create function app.before_user_created_hook(event jsonb)
 returns jsonb
 language sql
@@ -52,7 +53,8 @@ as $$
     when exists (
       select 1 from app.signup_allowlist a
       where a.email = lower(event -> 'user' ->> 'email')
-        and a.provider = event -> 'user' -> 'app_metadata' ->> 'provider'
+        and a.provider = 'google'
+        and event -> 'user' -> 'app_metadata' ->> 'provider' = 'google'
     ) then '{}'::jsonb
     else jsonb_build_object(
       'error', jsonb_build_object('http_code', 403, 'message', 'Signups are closed.')

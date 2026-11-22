@@ -66,6 +66,13 @@ def test_emails_are_kept_in_lower_case() -> None:
         ),
         couple_toml("secret-alice@twochi.test", "b@t.es").replace('"Alice"', '""', 1),
         "[[couples]]\nthis is not toml",
+        couple_toml("secret-alice@twochi.test", "b@t.es").replace(
+            "[[couples]]", "[[couple]]", 1
+        ),
+        '[test_couple]\ntimezone = "Europe/Madrid"\n',
+        couple_toml("secret-alice@twochi.test", "b@t.es").replace(
+            "pet_name", "pet_nmae", 1
+        ),
     ],
     ids=[
         "one-person",
@@ -76,6 +83,9 @@ def test_emails_are_kept_in_lower_case() -> None:
         "bad-model-key",
         "empty-name",
         "not-toml",
+        "misspelt-couples",
+        "no-couple",
+        "misspelt-person-key",
     ],
 )
 def test_a_wrong_file_is_refused_without_naming_anyone(toml: str) -> None:
@@ -303,3 +313,35 @@ def test_an_unknown_timezone_is_refused(
 
     assert main(["--file", str(file), "--out", str(tmp_path / "out")]) == 1
     assert "timezone" in capsys.readouterr().err
+
+
+def test_moving_someone_to_another_couple_is_refused_and_changes_nothing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tag = uuid4().hex
+    a, b, c, d = (f"{x}-{tag}@twochi.test" for x in "abcd")
+    file = tmp_path / "provision.toml"
+    args = ["--file", str(file), "--out", str(tmp_path / "out")]
+    file.write_text(couple_toml(a, c), encoding="utf-8")
+    assert main(args) == 0
+
+    file.write_text(couple_toml(a, b) + couple_toml(c, d), encoding="utf-8")
+    capsys.readouterr()
+    assert main(args) == 1
+
+    assert "changed couples" in capsys.readouterr().err
+    assert (
+        scalar(
+            "select count(distinct couple_id) as value from app.signup_allowlist "
+            "where email = any($1)",
+            [a, c],
+        )
+        == 1
+    )
+    assert (
+        scalar(
+            "select count(*) as value from app.signup_allowlist where email = any($1)",
+            [b, d],
+        )
+        == 0
+    )

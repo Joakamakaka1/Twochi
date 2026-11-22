@@ -95,6 +95,9 @@ def load_plan(text: str) -> Plan:
     except tomllib.TOMLDecodeError as error:
         # The decoder reports a position, never the offending value.
         raise ProvisionError(f"The file is not valid TOML: {error}.") from None
+    # The file is the whole list: a misspelt table would read as no couple at all and
+    # empty the allowlist. Unknown keys are refused at every level.
+    _only(data, {"couples", "test_couple"}, "The file")
     couples = tuple(
         _couple(_table(raw, f"couples[{i}]"), f"couples[{i}]")
         for i, raw in enumerate(_list(data.get("couples", []), "couples"))
@@ -102,11 +105,14 @@ def load_plan(text: str) -> Plan:
     test_couple = None
     if (raw := data.get("test_couple")) is not None:
         table = _table(raw, "test_couple")
+        _only(table, {"timezone", "smoke", "partner"}, "test_couple")
         test_couple = SmokeCouple(
             timezone=_timezone(table, "test_couple"),
             smoke=_person(table.get("smoke"), "test_couple.smoke"),
             partner=_person(table.get("partner"), "test_couple.partner"),
         )
+    if not couples:
+        raise ProvisionError("The file lists no couple; it would empty the allowlist.")
     everyone = [p for c in couples for p in c.people]
     if test_couple is not None:
         everyone += test_couple.couple.people
@@ -116,6 +122,7 @@ def load_plan(text: str) -> Plan:
 
 
 def _couple(table: Mapping[str, object], where: str) -> CoupleEntry:
+    _only(table, {"timezone", "people"}, where)
     people = _list(table.get("people"), f"{where}.people")
     if len(people) != 2:
         raise ProvisionError(f"{where} must have exactly two people.")
@@ -125,6 +132,7 @@ def _couple(table: Mapping[str, object], where: str) -> CoupleEntry:
 
 def _person(raw: object, where: str) -> Person:
     table = _table(raw, where)
+    _only(table, {"email", "display_name", "pet_name", "pet_model_key"}, where)
     email = _text(table, "email", where, max_length=320).lower()
     if not EMAIL.fullmatch(email):
         raise ProvisionError(f"{where}.email is not an email address.")
@@ -143,6 +151,11 @@ def _timezone(table: Mapping[str, object], where: str) -> str:
     if "timezone" not in table:
         return "Europe/Madrid"
     return _text(table, "timezone", where, max_length=64)
+
+
+def _only(table: Mapping[str, object], allowed: set[str], where: str) -> None:
+    if unknown := sorted(set(table) - allowed):
+        raise ProvisionError(f"{where} has unknown keys: {', '.join(unknown)}.")
 
 
 def _table(raw: object, where: str) -> Mapping[str, object]:
@@ -221,6 +234,10 @@ def production_target(env: Mapping[str, str]) -> Target:
     names = ("TWOCHI_PROVISION_DB_URL", "SUPABASE_URL", "SUPABASE_SECRET_KEY")
     if missing := [n for n in names if not env.get(n)]:
         raise ProvisionError(f"--production needs {', '.join(missing)}.")
+    if not env["SUPABASE_URL"].startswith("https://"):
+        raise ProvisionError(
+            "SUPABASE_URL must be https: the secret key travels on it."
+        )
     return Target(
         name="production",
         db_url=env["TWOCHI_PROVISION_DB_URL"],
@@ -282,6 +299,18 @@ async def provision(
                 [p.email for c in couples for p in c.people],
             )
             report.rows_removed += _affected(status)
+            # A person listed in one couple and now written into another lands in the
+            # couple of whoever was already listed: refuse rather than pile them up.
+            uneven = await connection.fetch(
+                "select 1 from app.signup_allowlist "
+                "group by couple_id having count(*) <> 2"
+            )
+            if uneven:
+                raise ProvisionError(
+                    "A couple would end with other than two people on the list. Take "
+                    "whoever changed couples out of the file, run provision, then add "
+                    "them back."
+                )
         if plan.test_couple is not None:
             async with httpx2.AsyncClient(
                 base_url=f"{target.api_url}/auth/v1",
@@ -380,6 +409,12 @@ async def _create_test_couple(
     *,
     rotate: bool,
 ) -> None:
+    # The partner first: the allowlist already names both, and every user Auth creates
+    # shortens the time someone else could try to sign up as them.
+    if await _find_user(connection, couple.partner.email) is None:
+        await _create_user(auth, couple.partner.email, None)
+        report.users_created += 1
+
     credentials = _read_credentials(credentials_file)
     smoke = await _find_user(connection, couple.smoke.email)
     if smoke is None:
@@ -420,10 +455,6 @@ async def _create_test_couple(
             f"The smoke user has a TOTP factor, but {credentials_file.name} does not "
             "hold its secret. Run `just provision --rotate-smoke` to enroll a new one."
         )
-
-    if await _find_user(connection, couple.partner.email) is None:
-        await _create_user(auth, couple.partner.email, None)
-        report.users_created += 1
 
 
 async def _find_user(connection: Connection, email: str) -> UUID | None:
