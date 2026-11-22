@@ -25,15 +25,26 @@ export async function sendCareAction(api: ApiClient, petId: Pet["id"], tap: Care
   return data;
 }
 
+// The Casa this tap was made from: signing out removes it, and the next person's is
+// another one.
+function currentHome(queryClient: QueryClient) {
+  return queryClient.getQueryCache().find<Home>({ queryKey: HOME_KEY, exact: true });
+}
+
 // The mutation keeps the tap as its variables, so each retry sends the same key.
 export function careActionMutation(api: ApiClient, petId: Pet["id"], queryClient: QueryClient) {
   return mutationOptions({
     mutationFn: (tap: CareTap) => sendCareAction(api, petId, tap),
     retry: retryApiWrite,
-    // A read of Casa in flight would answer with the pet before this action.
-    onMutate: () => queryClient.cancelQueries({ queryKey: HOME_KEY }),
-    // Applied or refused, the response brings the pet as it is now.
-    onSuccess: (result) => {
+    onMutate: async () => {
+      // A read of Casa in flight would answer with the pet before this action.
+      await queryClient.cancelQueries({ queryKey: HOME_KEY });
+      return { home: currentHome(queryClient) };
+    },
+    // Applied or refused, the response brings the pet as it is now; it goes into the
+    // Casa it was tapped from, and nowhere once that person has left.
+    onSuccess: (result, _tap, sent) => {
+      if (sent.home === undefined || currentHome(queryClient) !== sent.home) return;
       queryClient.setQueryData<Home>(HOME_KEY, { pet: result.pet });
     },
   });
