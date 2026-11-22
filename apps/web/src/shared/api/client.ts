@@ -61,3 +61,12 @@ const RETRIES = 3;
 export function retryApiRead(failureCount: number, error: unknown): boolean {
   return failureCount < RETRIES && !isAuthFailure(error);
 }
+
+// A write is sent again, with its same idempotency key, only when the API may not have
+// applied it or has not answered it yet: a network failure, a 409 (the first request is
+// still in flight) or a 5xx. Any other refusal would get the same answer again.
+export function retryApiWrite(failureCount: number, error: unknown): boolean {
+  if (failureCount >= RETRIES) return false;
+  if (!(error instanceof ApiError)) return true;
+  return error.status === 409 || error.status >= 500;
+}

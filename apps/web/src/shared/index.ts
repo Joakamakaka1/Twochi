@@ -10,6 +10,7 @@ export {
   createSignedFetch,
   isAuthFailure,
   retryApiRead,
+  retryApiWrite,
   useApi,
 } from "./api";
 export type {
