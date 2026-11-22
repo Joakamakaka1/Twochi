@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, createApi, texts } from "../../shared";
 import type { CareActionResult, Home, Pet } from "../../shared";
-import { careActionMutation, careFailureText, careOutcomeText, careTap } from "./careActions";
-import { HOME_KEY } from "./home";
+import { careActionMutation, careFailureText, careOutcomeText, careTap, onHomeRead } from "./careActions";
+import { HOME_KEY, homeQuery } from "./home";
 
 const need = (value: number) => ({ value, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -3 });
 
@@ -24,7 +24,7 @@ const tooTired: CareActionResult = { applied: false, rejection: "too_tired", del
 
 interface Sent {
   url: string;
-  body: { action: string; idempotency_key: string };
+  body: { action: string; idempotency_key: string } | null;
 }
 
 // The API as a function: records each care action it was sent and answers in turn.
@@ -33,7 +33,8 @@ function apiAnswering(...answers: (() => Response | Promise<Response>)[]) {
   const api = createApi(() => Promise.resolve("jwt-1"), {
     baseUrl: "https://twochi.test",
     baseFetch: async (request) => {
-      sent.push({ url: `${request.method} ${request.url}`, body: (await request.clone().json()) as Sent["body"] });
+      const body = request.method === "GET" ? null : ((await request.clone().json()) as Sent["body"]);
+      sent.push({ url: `${request.method} ${request.url}`, body });
       const answer = answers[Math.min(sent.length, answers.length) - 1];
       if (answer === undefined) throw new Error("no answer for this request");
       return answer();
@@ -66,7 +67,7 @@ describe("care actions", () => {
       `POST https://twochi.test/api/pets/${BRU.id}/care-actions`,
       `POST https://twochi.test/api/pets/${BRU.id}/care-actions`,
     ]);
-    const [first, second] = sent.map((request) => request.body.idempotency_key);
+    const [first, second] = sent.map((request) => request.body?.idempotency_key);
     expect(first).not.toBe(second);
     for (const key of [first, second]) expect(key).toMatch(/^[A-Za-z0-9_-]{1,64}$/);
   });
@@ -178,5 +179,34 @@ describe("a care action answered after the person left", () => {
     await tap;
 
     expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: null });
+  });
+});
+
+describe("the text of a refusal", () => {
+  it("stays after the response moves the bars, and goes when Casa is read again", async () => {
+    const { api } = apiAnswering(() => Response.json(tooTired), () => Response.json({ pet: BRU }));
+    const { queryClient, observer } = careFor(api);
+    onHomeRead(queryClient, () => {
+      observer.reset();
+    });
+
+    await observer.mutate(careTap("play"));
+    expect(careOutcomeText(observer.getCurrentResult().data)).toBe(texts.care.rejections.too_tired);
+
+    await queryClient.fetchQuery(homeQuery(api));
+    expect(careOutcomeText(observer.getCurrentResult().data)).toBeNull();
+  });
+
+  it("goes when the person taps another action", async () => {
+    const late = lateAnswer();
+    const { api } = apiAnswering(() => Response.json(tooTired), late.answer);
+    const { observer } = careFor(api);
+    await observer.mutate(careTap("play"));
+
+    const next = observer.mutate(careTap("pet"));
+
+    expect(careOutcomeText(observer.getCurrentResult().data)).toBeNull();
+    late.release(Response.json(applied));
+    await next;
   });
 });

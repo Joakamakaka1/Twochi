@@ -60,3 +60,7 @@ export function careOutcomeText(result: CareActionResult | undefined): string | 
 export function careFailureText(error: unknown): string | null {
   return error === null || isAuthFailure(error) ? null : texts.failure;
 }
+
+export function onHomeRead(_queryClient: QueryClient, _read: () => void): () => void {
+  return () => undefined;
+}
