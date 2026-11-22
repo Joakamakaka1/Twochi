@@ -102,3 +102,19 @@ provision *args:
 # Stop local Supabase.
 down:
     supabase stop
+
+# A work slot for a ticket that runs in parallel with others (TWO-43): the worktree
+# .claude/worktrees/slot-N on BRANCH (created from origin/main when new), dependencies
+# installed, and its own Supabase `twochi-sN` on ports 553xx + 100·N with CI's services.
+# N goes from 1 to 9; the main folder is slot 0. Inside a slot every recipe works as in
+# the main folder: the tests read the port from the slot's supabase/config.toml.
+[positional-arguments]
+slot n branch:
+    uv run --locked python scripts/slot.py up "$@"
+
+# Stop slot N's Supabase, delete its data and remove its worktree; the branch stays.
+# Never `twochi`, the main folder's. Uncommitted changes or unpushed commits stop it,
+# unless `--force` follows the number.
+[positional-arguments]
+slot-down n *flags:
+    uv run --locked python scripts/slot.py down "$@"
