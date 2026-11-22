@@ -204,18 +204,20 @@ def up(slot: int, branch: str) -> None:
         if known:
             _run("git", "worktree", "add", str(folder), branch, cwd=main)
         else:
+            # --no-track: the new branch is not main's, and must not push there.
             _run(
-                "git", "worktree", "add", "-b", branch, str(folder), "origin/main",
-                cwd=main,
+                "git", "worktree", "add", "--no-track", "-b", branch, str(folder),
+                "origin/main", cwd=main,
             )  # fmt: skip
     elif not _is_worktree(folder):
         raise SlotError(f"{folder} exists and is not a git worktree.")
-    elif (on := _output("git", "branch", "--show-current", cwd=folder).strip()) != (
-        branch
-    ):
-        raise SlotError(
-            f"Slot {slot} is on `{on}`, not `{branch}`: `just slot-down {slot}` first."
-        )
+    else:
+        on = _output("git", "branch", "--show-current", cwd=folder).strip()
+        if on != branch:
+            raise SlotError(
+                f"Slot {slot} is on `{on}`, not `{branch}`: "
+                f"`just slot-down {slot}` first."
+            )
 
     # From what git holds, not from the file: running this again changes nothing.
     config = slot_config(_output("git", "show", f"HEAD:{CONFIG}", cwd=folder), slot)
@@ -251,8 +253,9 @@ def down(slot: int, *, force: bool) -> None:
         )
         if problems and not force:
             raise SlotError(
-                f"Slot {slot} has {' and '.join(problems)}, which removing it would "
-                f"lose. Save them, or `just slot-down {slot} --force`."
+                f"Slot {slot} has {' and '.join(problems)}. Commit and push them, or "
+                f"`just slot-down {slot} --force`: the changes are lost and the "
+                "commits stay only on the local branch."
             )
     # By name, never by the config found from here: the project is always `twochi-sN`
     # with N from 1, so this cannot stop `twochi`. Its data volumes go too.
@@ -262,6 +265,10 @@ def down(slot: int, *, force: bool) -> None:
             "git", "worktree", "remove", *(["--force"] if force else []), str(folder),
             cwd=main,
         )  # fmt: skip
+    if folder.exists():
+        # Git for Windows drops the worktree and leaves the folders of node_modules
+        # that held pnpm's junctions. Nothing tracked is left by now.
+        shutil.rmtree(folder)
     sys.stdout.write(f"Slot {slot} is gone: `{project_of(slot)}` stopped.\n")
 
 
