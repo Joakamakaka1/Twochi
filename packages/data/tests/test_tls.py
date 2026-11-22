@@ -159,18 +159,17 @@ async def _impostor(context: ssl.SSLContext) -> AsyncGenerator[int]:
         await server.wait_closed()
 
 
-async def test_a_server_supabase_did_not_sign_is_refused(tmp_path: Path) -> None:
+# Whatever `sslmode` the DSN carries, if any, cannot weaken the check.
+@pytest.mark.parametrize(
+    "query",
+    ["", "?sslmode=disable", "?sslmode=allow", "?sslmode=prefer", "?sslmode=require"],
+)
+async def test_a_server_supabase_did_not_sign_is_refused(
+    tmp_path: Path, query: str
+) -> None:
     async with _impostor(_server(tmp_path, None, [LOOPBACK])) as port:
         with pytest.raises(ssl.SSLCertVerificationError):
-            await connect(IMPOSTOR_DSN.format(port=port), require_tls=True)
-
-
-@pytest.mark.parametrize("sslmode", ["disable", "allow", "prefer", "require"])
-async def test_the_dsn_cannot_weaken_the_check(tmp_path: Path, sslmode: str) -> None:
-    async with _impostor(_server(tmp_path, None, [LOOPBACK])) as port:
-        dsn = IMPOSTOR_DSN.format(port=port) + f"?sslmode={sslmode}"
-        with pytest.raises(ssl.SSLCertVerificationError):
-            await connect(dsn, require_tls=True)
+            await connect(IMPOSTOR_DSN.format(port=port) + query, require_tls=True)
 
 
 async def test_the_environment_cannot_weaken_the_check(
