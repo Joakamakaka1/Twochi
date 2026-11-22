@@ -44,7 +44,7 @@ check-web:
 # it finds no shellcheck, so it gets the pinned one by path; `mise which` fails when that
 # version is not installed.
 check-workflows:
-    shellcheck="$(mise which shellcheck)" && actionlint -shellcheck "$shellcheck" && "$shellcheck" .github/scripts/*.sh
+    shellcheck="$(mise which shellcheck)" && actionlint -shellcheck "$shellcheck" && for script in .github/scripts/*.sh; do [ ! -e "$script" ] || "$shellcheck" "$script"; done
     zizmor .
 
 # Terraform: format, validate each root (modules through them) without a backend, and tflint;

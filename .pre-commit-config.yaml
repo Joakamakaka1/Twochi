@@ -1,19 +1,26 @@
 # Fast local guards: secrets, Python format and lint. Run with `uvx pre-commit@4.7.0`.
 # Hooks are pinned to a commit; keep the ruff rev in step with ruff in uv.lock.
+# `just setup` installs both hook types; every hook runs before the commit, and the
+# Supabase IDs guard also reads the commit message.
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # frozen: v8.30.1
     hooks:
       - id: gitleaks
-  # The linked Supabase project's ref and organization ID never enter git (TWO-40).
+  # The linked Supabase project's ref and organization IDs never enter git (TWO-40).
   # Read from the gitignored supabase/.temp, so CI, which has none, compares nothing.
+  # Every file type: the script reads raw bytes, and UTF-16 files count as binary.
+  # It runs on the project's own Python 3.14 through uv, as `just` does; pre-commit's
+  # Python is older and rejects 3.14 syntax.
   - repo: local
     hooks:
       - id: supabase-project-ids
         name: No linked Supabase project IDs
-        language: python
-        entry: python .github/scripts/project_ref_guard.py
-        types: [text]
+        language: system
+        entry: uv run --locked python .github/scripts/project_ref_guard.py
+        stages: [pre-commit, commit-msg]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: ef6cf06c079dd6b299dfc720b0f14400c9d168e1 # frozen: v0.17.5
     hooks:
