@@ -67,6 +67,13 @@ check-infra:
 package app="api":
     uv run --locked python .github/scripts/lambda_package.py build {{app}} dist
 
+# Post-deploy smoke test through CloudFront: resolves the domain over DoH (dns.google),
+# since a local DNS may intercept it, then checks /api/health, the front and an API 404.
+# Three GETs without credentials against production; the table is the PR's evidence.
+# Only from an allowed country: the WAF blocks the rest, CI's runners included.
+smoke-edge:
+    uv run --locked python scripts/smoke_edge.py
+
 # Format and autofix.
 fmt:
     uv run --locked ruff format .
