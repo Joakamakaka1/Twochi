@@ -17,10 +17,28 @@ Las specs y los tickets viven en Linear, en el equipo Twochi y en un solo proyec
 - Al terminar, lo cierra con un comentario de lo hecho y de lo que no pudo comprobar.
 - Tras tres intentos fallidos sobre el mismo error, el agente para: escribe en el issue lo que probó y lo que descarta, lo marca bloqueado y toma otro ticket. No rebaja un check para salir.
 
-## Cerrado es desplegado
+## Frontera en paralelo
 
-- Un issue fusionado pasa a «pendiente de desplegar». Se cierra cuando la prueba de humo pasa en producción.
-- Con cinco PR fusionados sin desplegar, se deja de fusionar hasta que alguien despliega: un lote pequeño se revierte fácil.
+El detalle y su prueba están en el [ADR 0013](../adr/0013-parallel-tickets-one-slot-per-agent.md).
+
+- El orquestador lanza hasta tres tickets a la vez, cada uno a un subagente con su hueco: un worktree en `.claude/worktrees/slot-N` y su propia instancia de Supabase.
+- Dos tickets van juntos si ninguno bloquea al otro, sus rutas previstas no se cruzan y como mucho uno toca un punto caliente: migraciones, lockfiles, `GLOSSARY.md`, contratos compartidos o `supabase/config.toml`.
+- Un ticket fusionado que espera despliegue ya no bloquea a los que dependen de su código: se pueden tomar.
+- Cada agente entrega su rama sin empujarla. El orquestador la revisa, abre el PR y, tras cada fusión, hace que las demás ramas traigan `main` y repitan `just check`.
+
+## Quién fusiona
+
+Decidido en el [ADR 0014](../adr/0014-game-first-care-is-v1-and-the-ai-merges.md).
+
+- La IA fusiona los PR, también los de zonas delicadas, con `ci-ok` en verde, `just check` en local sobre la rama con `main` dentro, la revisión de su tamaño sin hallazgos altos ni medios abiertos y, si el cambio se ve, la comprobación en el navegador.
+- Espera a una persona el PR que debilita un control: quitar o relajar un check, tocar el ruleset, ampliar permisos de IAM o de un rol de la base, o cambiar cómo se guardan los secretos.
+- Siempre squash, de una en una, sin auto-merge y sin la API.
+
+## Cuándo se cierra un ticket
+
+- Un ticket del juego se cierra fusionado y comprobado en local. No espera al despliegue.
+- Un ticket del carril de despliegue se cierra cuando la prueba de humo pasa en producción.
+- El tope de cinco PR sin desplegar está en suspenso hasta el primer despliegue de migraciones y front. Después cuenta solo los PR desplegables.
 
 ## Ramas y PR
 

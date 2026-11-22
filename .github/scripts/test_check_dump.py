@@ -1,4 +1,11 @@
-from check_dump import TableRows, exclusion_problems, row_differences
+from pathlib import Path
+
+from check_dump import (
+    TableRows,
+    exclusion_problems,
+    has_own_config,
+    row_differences,
+)
 
 BEFORE = {
     "app.couples": TableRows(count=1, digest="c0"),
@@ -94,3 +101,29 @@ def test_a_dump_without_the_users_proves_nothing_about_exclusions() -> None:
         "data.sql has no COPY of auth.users, so its exclusions cannot be checked: "
         "did pg_dump's output change?"
     ]
+
+
+MAIN_CONFIG = 'project_id = "twochi"\n\n[db]\nport = 55322\n'
+SLOT_CONFIG = 'project_id = "twochi-s2"\n\n[db]\nport = 55522\n'
+
+
+def checkout_at(folder: Path, config: str) -> Path:
+    (folder / "supabase").mkdir(parents=True)
+    (folder / "supabase" / "config.toml").write_text(config, encoding="utf-8")
+    return folder
+
+
+def test_a_slot_on_the_main_folders_config_is_not_its_own(tmp_path: Path) -> None:
+    # The check would dump the main folder's database and then reset it.
+    slot = tmp_path / ".claude" / "worktrees" / "slot-2"
+
+    assert not has_own_config(checkout_at(slot, MAIN_CONFIG))
+
+
+def test_a_slot_on_its_config_and_the_main_folder_have_their_own(
+    tmp_path: Path,
+) -> None:
+    slot = tmp_path / "a" / ".claude" / "worktrees" / "slot-2"
+
+    assert has_own_config(checkout_at(slot, SLOT_CONFIG))
+    assert has_own_config(checkout_at(tmp_path / "b", MAIN_CONFIG))
