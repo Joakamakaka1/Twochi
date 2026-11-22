@@ -295,3 +295,23 @@ async def test_an_unknown_pet_is_not_found(
 
     with pytest.raises(PetNotFoundError):
         await care(db, couple.actor(couple.bruno), PetId(uuid4()), CareAction.FEED)
+
+
+async def test_a_double_tap_at_once_applies_once(couples: Couples) -> None:
+    couple = await couples.create(needs_of_alices_pet={Need.HUNGER: 20}, updated_at=T0)
+    first, second = (
+        PostgresDatabase(API_URL, require_tls=False),
+        PostgresDatabase(API_URL, require_tls=False),
+    )
+    try:
+        results = await asyncio.gather(
+            bruno_cares(first, couple, CareAction.FEED, key="same-tap"),
+            bruno_cares(second, couple, CareAction.FEED, key="same-tap"),
+        )
+        seen = await needs_seen_by_bruno(first, couple)
+    finally:
+        await first.close()
+        await second.close()
+
+    assert [r.deltas for r in results] == [{Need.HUNGER: 30}, {Need.HUNGER: 30}]
+    assert seen[Need.HUNGER] == 50
