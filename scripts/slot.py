@@ -311,7 +311,14 @@ def up(slot: int, branch: str) -> None:
     )
 
 
-def down(slot: int, *, force: bool) -> None:
+def down(slot: int, *, force: bool, checkout: Path) -> None:
+    if slot in {slot_of(checkout), slot_of(Path.cwd())}:
+        # Before any side effect: on Windows this very Python and this folder are in
+        # use, so Supabase and its data would go and the worktree stay half removed.
+        raise SlotError(
+            f"Slot {slot} is not removed from inside itself: run "
+            f"`just slot-down {slot}` in the main folder."
+        )
     main = _main_folder()
     folder = _slot_folder(main, slot)
     if folder.exists():
@@ -373,7 +380,8 @@ def guard(files: Sequence[Path]) -> int:
     return 1 if refused else 0
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None, *, checkout: Path = ROOT) -> int:
+    """`checkout` is the folder this script runs from: tests pass another."""
     parser = argparse.ArgumentParser(prog="slot")
     commands = parser.add_subparsers(dest="command", required=True)
     up_command = commands.add_parser("up")
@@ -402,7 +410,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if command == "up":
             up(slot, cast(str, args.branch))
         else:
-            down(slot, force=cast(bool, args.force))
+            down(slot, force=cast(bool, args.force), checkout=checkout)
     except SlotError as error:
         sys.stderr.write(f"slot: {error}\n")
         return 1
