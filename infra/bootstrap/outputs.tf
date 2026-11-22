@@ -29,7 +29,7 @@ output "apply_role_arn" {
 }
 
 output "backup_role_arn" {
-  description = "Role the backup jobs assume. Goes to the backup environment secret AWS_BACKUP_ROLE_ARN (ADR 0010)."
+  description = "Role the backup jobs assume. Goes to the backup environment secret AWS_BACKUP_ROLE_ARN (ADR 0011)."
   value       = aws_iam_role.backup.arn
 }
 

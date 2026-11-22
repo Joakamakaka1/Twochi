@@ -13,7 +13,7 @@ Lo que debe existir antes de que corra el pipeline y lo que no debe estar al alc
 | `twochi-ci-read` | Lecturas de los servicios del stack, y nada más. Sustituye a `ReadOnlyAccess`, que también lee contacto, impuestos, pagos, facturas y CloudTrail de la cuenta |
 | `twochi-plan` | `twochi-ci-read` para `terraform plan -lock=false` en los PR. Confía en `pull_request` del `sub` inmutable del repositorio |
 | `twochi-apply` | Escribe el stack, solo desde el entorno `prod` (tu aprobación, solo desde `main`) |
-| `twochi-backup` | Sube los volcados de la base, solo desde el entorno `backup` (solo desde `main`, sin aprobación). Solo crea objetos: ni lee, ni lista, ni borra, ni sobrescribe ([ADR 0010](../../docs/adr/0010-backup-role-create-only.md)) |
+| `twochi-backup` | Sube los volcados de la base, solo desde el entorno `backup` (solo desde `main`, sin aprobación). Solo crea objetos: ni lee, ni lista, ni borra, ni sobrescribe ([ADR 0011](../../docs/adr/0011-backup-role-create-only.md)) |
 | `twochi-workload-boundary` | Techo de permisos de cada rol que crea el stack |
 | Bloqueo de acceso público de la cuenta | Ningún bucket puede hacerse público, diga lo que diga una política |
 | `ExternalAccess-6KkUmMA8mfdV` | Access Analyzer: detecta si una política abre algo a otra cuenta. AWS admite uno por cuenta y región; este quedó de un proyecto anterior y `bootstrap` lo adopta con un `import`, con su nombre, porque renombrarlo lo recrea |
@@ -40,11 +40,15 @@ Los logs de Actions son públicos y un `plan` ejecuta el código del PR, así qu
 
 ## El rol de backups
 
-`twochi-backup` solo tiene `s3:PutObject` en `twochi-backups-<cuenta>/*`, y solo si la subida manda `If-None-Match: *`: S3 la rechaza si la clave ya existe. El bucket borra las versiones antiguas al día siguiente, así que sobrescribir un volcado lo destruiría.
+`twochi-backup` solo tiene `s3:PutObject` en `twochi-backups-<cuenta>/*`, y solo si la subida manda `If-None-Match: *` (S3 la rechaza si la clave ya existe), sin clave de cifrado propia (SSE-C) y en la clase `STANDARD`. El bucket borra las versiones antiguas al día siguiente, así que sobrescribir un volcado lo destruiría.
 
 - Cada volcado lleva una clave nueva, con fecha y hora; repetir una clave falla con `412 Precondition Failed`.
-- La subida es un solo `PUT`, hasta 5 GB: `aws s3api put-object --if-none-match '*'`. La subida por partes no manda la cabecera en sus primeros pasos, así que `aws s3 cp` con un fichero grande falla con `AccessDenied`.
+- La subida es un solo `PUT` desde un fichero, hasta 5 GB: `aws s3api put-object --if-none-match '*'`. Cualquier subida sin esa cabecera falla con `AccessDenied`, también la subida por partes, que no la manda en sus primeros pasos; un `pg_dump | aws s3 cp -` es por partes.
 - Restaurar es cosa de una persona, con su usuario de administración: el rol no lee ni lista el bucket.
+
+## Antes de aplicar un rol nuevo
+
+Crea antes su entorno de GitHub, con su política de rama. GitHub crea al vuelo, sin política, el entorno que nombra un job, así que entre el `apply` y la creación a mano cualquier rama del repositorio podría asumir el rol. Para `twochi-backup`, el entorno `backup`: solo la rama `main` y sin revisores, para que el job diario corra solo. Solo lo declaran los jobs de volcado. Compruébalo con `gh api repos/Joakamakaka1/Twochi/environments/backup/deployment-branch-policies`.
 
 ## Primer apply
 
@@ -64,7 +68,6 @@ Con tu usuario de administración, en otra terminal, fuera del alcance de la IA:
 
 ## Después del apply
 
-- En GitHub, el entorno `backup`: solo la rama `main` y sin revisores, para que el job diario corra solo. Solo lo declaran los jobs de volcado.
 - En Cloudflare, los registros `NS` de `twochi` con los valores de `terraform output zone_name_servers` (TWO-14).
 - En GitHub, como secretos, para que los logs públicos los enmascaren (llevan el ID de la cuenta): `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET` y `TF_ARTIFACTS_BUCKET` en el repositorio, `AWS_APPLY_ROLE_ARN` en el entorno `prod`, y `AWS_BACKUP_ROLE_ARN` y `BACKUPS_BUCKET` en el entorno `backup`. Con ellos y la variable `SUPABASE_URL` (ver `infra/stack`), el `plan` de los PR y el despliegue en `main` dejan de saltarse.
 
