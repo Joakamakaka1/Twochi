@@ -5,6 +5,7 @@ import { texts } from "../../shared";
 import type { AuthPort } from "./authPort";
 import { EnrollTotpScreen } from "./EnrollTotpScreen";
 import { SignInScreen } from "./SignInScreen";
+import { SignOutButton } from "./SignOutButton";
 import { AuthContext, useGate } from "./useAuth";
 import { VerifyTotpScreen } from "./VerifyTotpScreen";
 
@@ -27,6 +28,7 @@ export function AuthGate({ auth, children }: AuthGateProps) {
           <button type="button" onClick={() => void gate.refetch()}>
             {texts.retry}
           </button>
+          <SignOutButton />
         </main>
       );
     }
