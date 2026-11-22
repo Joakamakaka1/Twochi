@@ -19,6 +19,7 @@ locals {
   bootstrap_iam_arns = [
     aws_iam_role.plan.arn,
     "arn:aws:iam::${local.acct}:role/twochi-apply",
+    aws_iam_role.backup.arn,
     aws_iam_openid_connect_provider.github.arn,
     aws_iam_policy.workload_boundary.arn,
     "arn:aws:iam::${local.acct}:role/twochi-findings-forwarder",

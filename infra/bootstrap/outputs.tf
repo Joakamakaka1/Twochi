@@ -28,6 +28,11 @@ output "apply_role_arn" {
   value       = aws_iam_role.apply.arn
 }
 
+output "backup_role_arn" {
+  description = "Role the backup jobs assume. Goes to the backup environment secret AWS_BACKUP_ROLE_ARN (ADR 0010)."
+  value       = aws_iam_role.backup.arn
+}
+
 output "workload_boundary_arn" {
   description = "Permissions boundary every stack role must carry."
   value       = aws_iam_policy.workload_boundary.arn
