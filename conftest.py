@@ -16,6 +16,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from slot import require_own_config
 
 from twochi_application.actors import UserActor
 from twochi_data.sql import CONNECT_ERRORS, Connection, connect
@@ -30,13 +31,26 @@ class DatabaseUrls:
     backup: str  # the dumps' read-only role (ADR 0012)
 
 
-def database_urls(config: str, env: Mapping[str, str]) -> DatabaseUrls:
+_VARIABLES = (
+    "TWOCHI_TEST_ADMIN_URL",
+    "TWOCHI_TEST_DATABASE_URL",
+    "TWOCHI_TEST_BACKUP_URL",
+)
+
+
+def database_urls(checkout: Path, config: str, env: Mapping[str, str]) -> DatabaseUrls:
     """Local Supabase's Postgres on the port `config`, a supabase/config.toml, gives it.
 
     The config is the one of the checkout the tests run in: in a slot (`just slot`) it
     names the slot's own instance, so its tests never write to the main folder's. Each
     variable overrides its URL. The passwords are the local stack's and the seed's.
+
+    A slot whose config went back to the main folder's is refused here, before any
+    test writes to the main folder's database; not when the three variables say
+    where to go.
     """
+    if not all(variable in env for variable in _VARIABLES):
+        require_own_config(checkout, config)
     port = tomllib.loads(config)["db"]["port"]
 
     def url(variable: str, login: str) -> str:
@@ -49,8 +63,10 @@ def database_urls(config: str, env: Mapping[str, str]) -> DatabaseUrls:
     )
 
 
+_CHECKOUT = Path(__file__).resolve().parent
 _URLS = database_urls(
-    (Path(__file__).parent / "supabase" / "config.toml").read_text(encoding="utf-8"),
+    _CHECKOUT,
+    (_CHECKOUT / "supabase" / "config.toml").read_text(encoding="utf-8"),
     os.environ,
 )
 ADMIN_URL = _URLS.admin

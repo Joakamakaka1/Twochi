@@ -5,12 +5,15 @@ A slot is the git worktree `.claude/worktrees/slot-N` of the main folder. Its
 further per slot, so its tests, `supabase db reset` and `check-dump` never reach the
 main folder's instance (`twochi`, ports 553xx), which is slot 0 and nobody's to stop.
 The rewritten file is hidden from git with skip-worktree, and the pre-commit guard
-refuses it if that mark is ever lost.
+refuses it if that mark is ever lost. The other way round, a slot whose file went
+back to the main folder's is refused by the tests and by `check-dump` before they
+reach a database.
 
 Usage:
   python slot.py up N BRANCH       create slot N on BRANCH and start its Supabase
   python slot.py down N [--force]  stop slot N's Supabase and remove its worktree
   python slot.py guard FILE...     pre-commit: a slot's config never enters a commit
+  python slot.py check [CHECKOUT]  a slot's checkout still has the slot's config
 """
 
 import argparse
@@ -51,9 +54,12 @@ class SlotError(Exception):
 # --- Decisions, on plain text ---------------------------------------------------------
 
 
+_SLOTS = frozenset(str(slot) for slot in range(1, MAX_SLOT + 1))
+
+
 def slot_number(raw: str) -> int:
     """`raw` as a slot. Slot 0 is the main folder: nothing here creates or stops it."""
-    if raw not in {str(slot) for slot in range(1, MAX_SLOT + 1)}:
+    if raw not in _SLOTS:
         raise SlotError(
             f"`{raw}` is no slot: slots go from 1 to {MAX_SLOT}. Slot 0 is the main "
             "folder, which `just up` and `just down` start and stop."
@@ -118,6 +124,56 @@ def slot_config(config: str, slot: int) -> str:
     if found != 1:
         raise SlotError(f'The config has no single `project_id = "{MAIN_PROJECT}"`.')
     return moved
+
+
+def slot_of(place: Path) -> int | None:
+    """The slot whose worktree `place` is or lies in, by its path; None elsewhere."""
+    parts = place.parts
+    for at in range(len(parts) - 2):
+        hidden, worktrees, name = parts[at : at + 3]
+        if (hidden, worktrees) == (".claude", "worktrees"):
+            number = name.removeprefix("slot-")
+            if name != number and number in _SLOTS:
+                return int(number)
+    return None
+
+
+def checkout_problems(checkout: Path, config: str) -> list[str]:
+    """Why `config` is not what the slot at `checkout` runs; empty for its own.
+
+    Clearing skip-worktree, a checkout or a merge can bring the main folder's file
+    back, and with it the slot's tests and `check-dump` would write to, and reset, the
+    main folder's database. A folder that is not a slot is not judged.
+    """
+    slot = slot_of(checkout)
+    if slot is None:
+        return []
+    try:
+        project: object = tomllib.loads(config).get("project_id")
+    except tomllib.TOMLDecodeError as error:
+        return [f"it is not valid TOML: {error}."]
+    own = range(MAIN_PORTS.start + 100 * slot, MAIN_PORTS.stop + 100 * slot)
+    problems: list[str] = []
+    if project != project_of(slot):
+        problems.append(f'project_id is "{project}", not "{project_of(slot)}".')
+    problems += [
+        f"line {line}: port {port} is not slot {slot}'s, which are "
+        f"{own.start // 100}xx."
+        for line, port in _ports(config)
+        if (port in MAIN_PORTS or port in SLOT_PORTS) and port not in own
+    ]
+    return problems
+
+
+def require_own_config(checkout: Path, config: str) -> None:
+    """Stop before a database is reached from a slot that lost its config."""
+    if problems := checkout_problems(checkout, config):
+        slot = slot_of(checkout)
+        raise SlotError(
+            f"{checkout} is slot {slot}, but its {CONFIG} is not the slot's: "
+            f"{problems[0]} Tests and `check-dump` would write to another instance's "
+            f"database. `just slot {slot} BRANCH` writes the slot's config again."
+        )
 
 
 def removal_problems(*, status: str, unpushed: str) -> list[str]:
@@ -272,6 +328,16 @@ def down(slot: int, *, force: bool) -> None:
     sys.stdout.write(f"Slot {slot} is gone: `{project_of(slot)}` stopped.\n")
 
 
+def check(checkout: Path) -> int:
+    try:
+        config = (checkout / CONFIG).read_text(encoding="utf-8")
+        require_own_config(checkout, config)
+    except (OSError, SlotError) as error:
+        sys.stderr.write(f"slot: {error}\n")
+        return 1
+    return 0
+
+
 def guard(files: Sequence[Path]) -> int:
     refused = False
     for file in files:
@@ -302,10 +368,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     guard_command = commands.add_parser("guard")
     guard_command.add_argument("files", nargs="*", type=Path)
+    check_command = commands.add_parser("check")
+    check_command.add_argument("checkout", nargs="?", type=Path, default=ROOT)
     args = parser.parse_args(argv)
     command = cast(str, args.command)
     if command == "guard":
         return guard(cast(Sequence[Path], args.files))
+    if command == "check":
+        return check(cast(Path, args.checkout).resolve())
     try:
         # Before anything runs: a wrong number never reaches git or Docker.
         slot = slot_number(cast(str, args.slot))
