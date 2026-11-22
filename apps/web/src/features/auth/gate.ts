@@ -7,6 +7,9 @@ export type Gate =
   | { step: "verify_totp"; factorId: string }
   | { step: "ready"; userId: string };
 
-export function resolveGate(_auth: AuthPort): Promise<Gate> {
-  return Promise.resolve({ step: "sign_in" });
+// The API and RLS enforce aal2 on their own; this only decides which screen to show.
+export async function resolveGate(auth: AuthPort): Promise<Gate> {
+  const assurance = await auth.assurance();
+  if (assurance?.level === "aal2") return { step: "ready", userId: assurance.userId };
+  return { step: "verify_totp", factorId: assurance?.totpFactorId ?? "" };
 }
