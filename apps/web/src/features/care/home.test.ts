@@ -2,25 +2,25 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, AUTH_HEADER, createApi, isAuthFailure, texts } from "../../shared";
-import type { Home } from "../../shared";
-import { homeHeadline, homeQuery, readHome } from "./home";
+import type { Home, Pet, VisibilitySource } from "../../shared";
+import { homeHeadline, homeQuery, readHome, refreshHomeOnForeground } from "./home";
 
-const BRU: Home = {
-  pet: {
-    id: "00000000-0000-4000-8000-0000000fb20b",
-    name: "Bru",
-    model_key: "placeholder",
-    asleep: false,
-    mood: "happy",
-    needs: {
-      hunger: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -4 },
-      energy: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -3 },
-      hygiene: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -2 },
-      fun: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -5 },
-      affection: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -3 },
-    },
+const BRU_PET: Pet = {
+  id: "00000000-0000-4000-8000-0000000fb20b",
+  name: "Bru",
+  model_key: "placeholder",
+  asleep: false,
+  mood: "happy",
+  needs: {
+    hunger: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -4 },
+    energy: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -3 },
+    hygiene: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -2 },
+    fun: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -5 },
+    affection: { value: 80, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -3 },
   },
 };
+
+const BRU: Home = { pet: BRU_PET };
 
 // The API as a function: records what it was sent and answers what the test says.
 function apiAnswering(answer: () => Response) {
@@ -112,5 +112,51 @@ describe("homeHeadline", () => {
 
   it("says the pet will arrive when their partner joins", () => {
     expect(homeHeadline({ pet: null })).toBe(texts.care.petArrivesWithPartner);
+  });
+});
+
+// The page as the browser shows it: visible or sent to the background.
+class FakePage extends EventTarget implements VisibilitySource {
+  visibilityState: DocumentVisibilityState = "visible";
+
+  become(state: DocumentVisibilityState) {
+    this.visibilityState = state;
+    this.dispatchEvent(new Event("visibilitychange"));
+  }
+}
+
+describe("refreshHomeOnForeground", () => {
+  it("reads Casa again from the API when the page comes back from the background", async () => {
+    const later: Home = { pet: { ...BRU_PET, asleep: true, mood: "normal" } };
+    let answer: Home = BRU;
+    const { api, sent } = apiAnswering(() => Response.json(answer));
+    const queryClient = new QueryClient();
+    const observer = new QueryObserver(queryClient, homeQuery(api));
+    const stopWatching = observer.subscribe(() => undefined);
+    await vi.waitFor(() => {
+      expect(observer.getCurrentResult().data).toEqual(BRU);
+    });
+    const page = new FakePage();
+    const stop = refreshHomeOnForeground(page, queryClient);
+
+    answer = later;
+    page.become("hidden");
+    expect(sent).toHaveLength(1);
+    page.become("visible");
+
+    await vi.waitFor(() => {
+      expect(observer.getCurrentResult().data).toEqual(later);
+    });
+    expect(sent.map((request) => `${request.method} ${request.url}`)).toEqual([
+      "GET https://twochi.test/api/homes/me",
+      "GET https://twochi.test/api/homes/me",
+    ]);
+
+    stop();
+    page.become("hidden");
+    page.become("visible");
+    await Promise.resolve();
+    expect(sent).toHaveLength(2);
+    stopWatching();
   });
 });

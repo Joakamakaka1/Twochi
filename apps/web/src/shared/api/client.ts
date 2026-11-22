@@ -1,10 +1,17 @@
 import { createApiClient } from "@twochi/api-client";
-import type { ApiClient } from "@twochi/api-client";
+import type { ApiClient, components } from "@twochi/api-client";
 
 import { createSignedFetch } from "./signedFetch";
 import type { FetchLike, TokenSource } from "./signedFetch";
 
 export type { ApiClient, Home, Pet } from "@twochi/api-client";
+
+type Schemas = components["schemas"];
+export type CareAction = Schemas["CareAction"];
+export type CareActionResult = Schemas["CareActionOut"];
+export type Mood = Schemas["Mood"];
+export type Need = Schemas["Need"];
+export type Rejection = Schemas["Rejection"];
 
 export interface ApiOptions {
   // Origin that serves /api: the page's own, in production and behind Vite's proxy.
@@ -53,4 +60,13 @@ const RETRIES = 3;
 // would get the same answer, and the person would wait for nothing.
 export function retryApiRead(failureCount: number, error: unknown): boolean {
   return failureCount < RETRIES && !isAuthFailure(error);
+}
+
+// A write is sent again, with its same idempotency key, only when the API may not have
+// applied it: a network failure or a 5xx. A duplicate never gets a 409: it waits on the
+// pet's lock and receives the stored result (ADR 0009). Any other refusal would get the
+// same answer again.
+export function retryApiWrite(failureCount: number, error: unknown): boolean {
+  if (failureCount >= RETRIES) return false;
+  return !(error instanceof ApiError) || error.status >= 500;
 }

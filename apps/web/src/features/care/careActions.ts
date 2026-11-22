@@ -1,0 +1,74 @@
+import { hashKey, mutationOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+
+import { apiError, isAuthFailure, retryApiWrite, texts } from "../../shared";
+import type { ApiClient, CareAction, CareActionResult, Home, Pet } from "../../shared";
+import { HOME_KEY } from "./home";
+
+/** One tap on a care button: its action and the key that names it on every retry. */
+export interface CareTap {
+  action: CareAction;
+  idempotency_key: string;
+}
+
+/** A new tap, with a key of its own (a UUID fits the API's `[A-Za-z0-9_-]{1,64}`). */
+export function careTap(action: CareAction): CareTap {
+  return { action, idempotency_key: crypto.randomUUID() };
+}
+
+export async function sendCareAction(api: ApiClient, petId: Pet["id"], tap: CareTap): Promise<CareActionResult> {
+  const { data, error, response } = await api.POST("/api/pets/{pet_id}/care-actions", {
+    params: { path: { pet_id: petId } },
+    body: tap,
+  });
+  if (data === undefined) throw apiError(response.status, error);
+  return data;
+}
+
+// The Casa this tap was made from: signing out removes it, and the next person's is
+// another one.
+function currentHome(queryClient: QueryClient) {
+  return queryClient.getQueryCache().find<Home>({ queryKey: HOME_KEY, exact: true });
+}
+
+// The mutation keeps the tap as its variables, so each retry sends the same key.
+export function careActionMutation(api: ApiClient, petId: Pet["id"], queryClient: QueryClient) {
+  return mutationOptions({
+    mutationFn: (tap: CareTap) => sendCareAction(api, petId, tap),
+    retry: retryApiWrite,
+    onMutate: async () => {
+      // A read of Casa in flight would answer with the pet before this action.
+      await queryClient.cancelQueries({ queryKey: HOME_KEY });
+      return { home: currentHome(queryClient) };
+    },
+    // Applied or refused, the response brings the pet as it is now; it goes into the
+    // Casa it was tapped from, and nowhere once that person has left.
+    onSuccess: (result, _tap, sent) => {
+      if (sent.home === undefined || currentHome(queryClient) !== sent.home) return;
+      queryClient.setQueryData<Home>(HOME_KEY, { pet: result.pet });
+    },
+  });
+}
+
+/** What Casa says after a tap: why the engine refused it, or nothing. */
+export function careOutcomeText(result: CareActionResult | undefined): string | null {
+  if (result?.rejection == null) return null;
+  return texts.care.rejections[result.rejection];
+}
+
+/** What Casa says when a tap failed: nothing after an auth failure, as the gate takes over. */
+export function careFailureText(error: unknown): string | null {
+  return error === null || isAuthFailure(error) ? null : texts.failure;
+}
+
+/**
+ * Calls `read` each time Casa is read again from the API, not when a care response
+ * writes it; returns how to stop. A refusal's text is about the pet before that read.
+ */
+export function onHomeRead(queryClient: QueryClient, read: () => void): () => void {
+  const homeHash = hashKey(HOME_KEY);
+  return queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== "updated" || event.query.queryHash !== homeHash) return;
+    if (event.action.type === "success" && event.action.manual !== true) read();
+  });
+}
