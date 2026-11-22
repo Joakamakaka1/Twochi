@@ -45,3 +45,7 @@ Destilado de [Arquitectura y convenciones](docs/arquitectura/arquitectura-y-conv
 - Los tests pasan por la costura pública: caso de uso o función del motor, nunca un detalle interno. [→](docs/arquitectura/arquitectura-y-convenciones.md#tests)
 - Los logs nunca llevan el texto de un mensaje, de una memoria o de la ficha. [→](docs/arquitectura/arquitectura-y-convenciones.md#convenciones-de-python)
 - Comentarios y docstrings solo donde explican un porqué. [→](docs/arquitectura/arquitectura-y-convenciones.md#convenciones-de-python)
+
+## Roles de la base
+
+- Un rol de solo lectura se comprueba contra lo que `PUBLIC` concede por defecto: `TEMP`, objetos grandes, cambiar su propia contraseña y las funciones `SECURITY DEFINER`. Lo que no se pueda cerrar se dice en su ADR. [→](docs/adr/0012-dump-with-read-only-role.md)
