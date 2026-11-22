@@ -7,6 +7,8 @@ import type { Gate } from "./gate";
 
 const AUTH_SCOPE = "auth";
 export const GATE_KEY = [AUTH_SCOPE, "gate"] as const;
+// The QR and its secret, kept only while the enrollment screen shows them.
+export const TOTP_ENROLLMENT_KEY = [AUTH_SCOPE, "totp_enrollment"] as const;
 
 // The gate lives in the query cache and never goes stale by time: only a change of
 // session resolves it again (followAuth).

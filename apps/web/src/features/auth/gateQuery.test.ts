@@ -18,7 +18,7 @@ async function enterAtAal2(auth: FakeAuth, userId: string) {
 async function appWith(auth: FakeAuth) {
   const queryClient = new QueryClient();
   followAuth(auth, queryClient);
-  const gate = () => queryClient.fetchQuery(gateQuery(auth, queryClient));
+  const gate = () => queryClient.query(gateQuery(auth, queryClient));
   await gate();
   return { queryClient, gate };
 }
