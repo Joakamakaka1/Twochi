@@ -77,6 +77,11 @@ up:
 reset:
     supabase db reset
 
+# Who may sign up and the test couple, from supabase/provision.toml (ADR 0007). Local by
+# default; `--production` writes to the hosted project, only with the user's explicit OK.
+provision *args:
+    uv run --locked python scripts/provision.py {{args}}
+
 # Stop local Supabase.
 down:
     supabase stop

@@ -90,9 +90,11 @@ jobs:
           version: ${{ env.MISE_VERSION }}
           install_args: python uv node just aqua:supabase/cli
       - run: uv sync --locked
-      # Only Postgres, with the migrations and the local seed: use-case, data and API
-      # tests run against it with real RLS (Arquitectura y convenciones, «Tests»).
-      - run: supabase db start
+      # Postgres, with the migrations and the local seed: use-case, data and API tests
+      # run against it with real RLS (Arquitectura y convenciones, «Tests»). Plus Auth
+      # and its gateway, which `just provision`'s test drives; nothing else.
+      - run: >-
+          supabase start -x realtime,storage-api,imgproxy,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - run: just check-db
       - run: just check-py
 

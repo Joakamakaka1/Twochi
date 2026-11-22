@@ -17,3 +17,6 @@ coverage.xml
 supabase/.temp/
 *_override.tf
 *.tfvars
+# `just provision`: the real people and the smoke user's credentials (ADR 0007).
+supabase/provision.toml
+supabase/.provision/

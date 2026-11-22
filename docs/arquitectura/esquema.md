@@ -73,6 +73,14 @@ Once tablas más; ninguna obliga a cambiar las del núcleo.
 
 Regalos, visitas y misiones no necesitan tabla propia al principio: son eventos en `pet_events` con su `action`.
 
+## Tabla de altas
+
+Una tabla fuera de los mapas: no es del juego, sino de quién entra en él ([ADR 0007](../adr/0007-signups-from-allowlist-table.md)).
+
+| Tabla | Columnas clave | Nota |
+| --- | --- | --- |
+| `signup_allowlist` | `email` (PK, en minúsculas), `couple_id`, `display_name`, `pet_name`, `pet_model_key` | Quién puede registrarse y la mascota que lo representará. La rellena `just provision`; solo la lee el hook de altas y ningún cliente |
+
 ## Acceso: roles, RLS y Realtime
 
 RLS solo es una red de seguridad real si la API no entra con un rol que se la salta. Hay seis caminos a la base de datos y cada uno merece su rol.

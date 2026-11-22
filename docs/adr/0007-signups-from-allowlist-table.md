@@ -14,6 +14,9 @@ El hook de altas (Before User Created Hook) rechaza cualquier correo que no sea 
 - La receta `just provision` rellena la tabla desde un fichero local ignorado por git. Crea las parejas, sus filas en la lista y los nombres y modelos de las mascotas. Es idempotente y la lanza la IA con tu aprobación cuando escribe en producción.
 - El hook acepta un alta solo si el correo está en la lista. Un trigger sobre el alta crea el perfil en su pareja y, cuando llega la segunda persona, las dos mascotas: cada una representa a una persona y la cuida la otra.
 - La pareja de prueba tiene al usuario de humo y a un segundo usuario de prueba sin contraseña que nunca entra. Los crea `just provision` con la API de administración, así que existen aunque las altas estén cerradas.
+- El trigger es `security definer`, del dueño `postgres` y con `search_path` vacío, y nadie puede llamarlo. El nacimiento lo hace el sistema y no una persona, así que no hay políticas de nadie que aplicar. La alternativa era dar a `supabase_auth_admin` inserts permanentes en cuatro tablas del juego. ADR 0009 descarta `security definer` solo para las escrituras del motor, que sí son de una persona.
+- Una persona que no está en la lista, como las del seed local o los tests, no recibe perfil. El hook es la puerta; el trigger no la duplica.
+- `just provision` genera la contraseña del usuario de humo, enrola su TOTP y lo verifica. Escribe la contraseña y el secreto en `supabase/.provision/<destino>.smoke.env`, que git ignora, y nunca los imprime. Supabase genera el secreto TOTP y no deja elegirlo. Mientras no exista el proyecto `twochi-dev` de Bitwarden, ese fichero es su único sitio. Decidido contigo el 2026-11-22.
 
 ## Alternativas descartadas
 
@@ -25,3 +28,4 @@ El hook de altas (Before User Created Hook) rechaza cualquier correo que no sea 
 
 - Hasta que se ejecute `just provision`, el hook rechaza a todo el mundo, también a vosotros dos. El orden es este: migración, `provision`, vuestras altas con Google y TOTP, y después se cierran las altas (TWO-13).
 - Cambiar la pareja o añadir una persona es editar el fichero local y volver a lanzar `provision`, no hacer una migración.
+- Si se pierde el fichero de credenciales del humo, `provision` no rota nada a ciegas: se para y pide borrar el usuario o su factor en Auth para crearlo de nuevo.

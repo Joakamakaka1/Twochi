@@ -69,14 +69,14 @@ typeCheckingMode = "strict"
 pythonVersion = "3.14"
 venvPath = "."
 venv = ".venv"
-include = ["packages", "apps", ".github/scripts"]
+include = ["packages", "apps", ".github/scripts", "scripts"]
 exclude = ["**/node_modules", "**/.venv", "apps/web", "packages/api-client"]
 
 [tool.pytest.ini_options]
 minversion = "9.0"
-testpaths = ["packages", "apps", ".github/scripts"]
-# The CI scripts are plain modules, not packages: their tests import them by name.
-pythonpath = [".github/scripts"]
+testpaths = ["packages", "apps", ".github/scripts", "scripts"]
+# The CI and admin scripts are plain modules, not packages: their tests import them by name.
+pythonpath = [".github/scripts", "scripts"]
 addopts = ["--import-mode=importlib", "--strict-markers", "--strict-config", "-ra"]
 xfail_strict = true
 
