@@ -18,8 +18,9 @@ resource "aws_iam_openid_connect_provider" "github" {
 # Trust for one exact subject, with the audience AWS expects.
 data "aws_iam_policy_document" "github_trust" {
   for_each = {
-    plan  = "${local.github_sub_prefix}:pull_request"
-    apply = "${local.github_sub_prefix}:environment:prod"
+    plan   = "${local.github_sub_prefix}:pull_request"
+    apply  = "${local.github_sub_prefix}:environment:prod"
+    backup = "${local.github_sub_prefix}:environment:backup"
   }
 
   statement {
