@@ -1,4 +1,4 @@
-import { ApiError } from "../../shared";
+import { ApiError, texts } from "../../shared";
 import type { ApiClient, Home } from "../../shared";
 
 export const HOME_KEY = ["home"] as const;
@@ -9,6 +9,7 @@ export async function readHome(api: ApiClient): Promise<Home> {
   return data;
 }
 
-export function homeHeadline(_home: Home): string {
-  return "";
+// Until both people have signed up there is no pet to care for.
+export function homeHeadline(home: Home): string {
+  return home.pet === null ? texts.care.petArrivesWithPartner : texts.care.caringFor(home.pet.name);
 }
