@@ -8,9 +8,11 @@ couple that isolates people also isolates tests and lets them run in parallel.
 import asyncio
 import json
 import os
+import tomllib
 from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -20,19 +22,40 @@ from twochi_data.sql import CONNECT_ERRORS, Connection, connect
 from twochi_domain.ids import CoupleId, PetId, UserId
 from twochi_domain.needs import Need
 
-# Local Supabase (`just up`); the ports are Twochi's own, see supabase/config.toml.
-ADMIN_URL = os.environ.get(
-    "TWOCHI_TEST_ADMIN_URL", "postgresql://postgres:postgres@127.0.0.1:55322/postgres"
+
+@dataclass(frozen=True, slots=True)
+class DatabaseUrls:
+    admin: str
+    api: str
+    backup: str  # the dumps' read-only role (ADR 0012)
+
+
+def database_urls(config: str, env: Mapping[str, str]) -> DatabaseUrls:
+    """Local Supabase's Postgres on the port `config`, a supabase/config.toml, gives it.
+
+    The config is the one of the checkout the tests run in: in a slot (`just slot`) it
+    names the slot's own instance, so its tests never write to the main folder's. Each
+    variable overrides its URL. The passwords are the local stack's and the seed's.
+    """
+    port = tomllib.loads(config)["db"]["port"]
+
+    def url(variable: str, login: str) -> str:
+        return env.get(variable, f"postgresql://{login}@127.0.0.1:{port}/postgres")
+
+    return DatabaseUrls(
+        admin=url("TWOCHI_TEST_ADMIN_URL", "postgres:postgres"),
+        api=url("TWOCHI_TEST_DATABASE_URL", "twochi_api:twochi-api-local"),
+        backup=url("TWOCHI_TEST_BACKUP_URL", "twochi_backup:twochi-backup-local"),
+    )
+
+
+_URLS = database_urls(
+    (Path(__file__).parent / "supabase" / "config.toml").read_text(encoding="utf-8"),
+    os.environ,
 )
-API_URL = os.environ.get(
-    "TWOCHI_TEST_DATABASE_URL",
-    "postgresql://twochi_api:twochi-api-local@127.0.0.1:55322/postgres",
-)
-# The dumps' read-only role (ADR 0012), with the seed's dev password.
-BACKUP_URL = os.environ.get(
-    "TWOCHI_TEST_BACKUP_URL",
-    "postgresql://twochi_backup:twochi-backup-local@127.0.0.1:55322/postgres",
-)
+ADMIN_URL = _URLS.admin
+API_URL = _URLS.api
+BACKUP_URL = _URLS.backup
 
 
 @pytest.fixture
