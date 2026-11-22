@@ -8,3 +8,7 @@ export async function readHome(api: ApiClient): Promise<Home> {
   if (data === undefined) throw new ApiError(response.status);
   return data;
 }
+
+export function homeHeadline(_home: Home): string {
+  return "";
+}

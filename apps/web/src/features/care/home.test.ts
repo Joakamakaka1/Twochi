@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { ApiError, AUTH_HEADER, createApi } from "../../shared";
+import { ApiError, AUTH_HEADER, createApi, texts } from "../../shared";
 import type { Home } from "../../shared";
-import { readHome } from "./home";
+import { homeHeadline, readHome } from "./home";
 
 const BRU: Home = {
   pet: {
@@ -51,5 +51,15 @@ describe("readHome", () => {
 
     expect(failure).toBeInstanceOf(ApiError);
     expect(failure).toMatchObject({ status: 403, message: "The API answered 403" });
+  });
+});
+
+describe("homeHeadline", () => {
+  it("names the pet in the person's care", () => {
+    expect(homeHeadline(BRU)).toBe("Cuidas a Bru");
+  });
+
+  it("says the pet will arrive when their partner joins", () => {
+    expect(homeHeadline({ pet: null })).toBe(texts.care.petArrivesWithPartner);
   });
 });
