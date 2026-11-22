@@ -58,6 +58,9 @@ NORMAL_FROM = 40.0
 SAD_FROM = 20.0
 # Any need below this leaves the pet sad at best, whatever the average.
 SAD_FLOOR = 10.0
+# A pet is born awake with every need here. The signup trigger writes it in SQL; a test
+# of the births keeps the two in step.
+BIRTH_NEED_VALUE = 80.0
 
 
 @dataclass(frozen=True, slots=True)
