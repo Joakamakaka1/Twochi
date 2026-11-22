@@ -1,10 +1,17 @@
 import { createApiClient } from "@twochi/api-client";
-import type { ApiClient } from "@twochi/api-client";
+import type { ApiClient, components } from "@twochi/api-client";
 
 import { createSignedFetch } from "./signedFetch";
 import type { FetchLike, TokenSource } from "./signedFetch";
 
 export type { ApiClient, Home, Pet } from "@twochi/api-client";
+
+type Schemas = components["schemas"];
+export type CareAction = Schemas["CareAction"];
+export type CareActionResult = Schemas["CareActionOut"];
+export type Mood = Schemas["Mood"];
+export type Need = Schemas["Need"];
+export type Rejection = Schemas["Rejection"];
 
 export interface ApiOptions {
   // Origin that serves /api: the page's own, in production and behind Vite's proxy.

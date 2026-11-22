@@ -12,5 +12,17 @@ export {
   retryApiRead,
   useApi,
 } from "./api";
-export type { ApiClient, ApiOptions, FetchLike, Home, Pet, TokenSource } from "./api";
+export type {
+  ApiClient,
+  ApiOptions,
+  CareAction,
+  CareActionResult,
+  FetchLike,
+  Home,
+  Mood,
+  Need,
+  Pet,
+  Rejection,
+  TokenSource,
+} from "./api";
 export { devTexts, texts } from "./ui";
