@@ -95,6 +95,22 @@ Lo que la prueba no cubre:
 - `check-web` y `check-infra` en paralelo: no comparten estado fuera del worktree, y no se midieron.
 - Más de dos instancias a la vez.
 
+## Piloto
+
+El mismo 22 de noviembre, con dos tickets reales de la frontera lanzados a la vez: TWO-27 (`just smoke-edge`, normal) en el hueco 1 y TWO-31 (entrada en la PWA, delicado) en el hueco 2.
+
+| | TWO-27 | TWO-31 |
+| --- | --- | --- |
+| Implementación, del encargo al informe | 6,6 min | 22,9 min |
+| Commits, con el test en rojo en uno propio antes del código | 2 | 19 |
+| `just check` completo en su hueco | verde, 367 tests | verde, 341 tests y 29 de vitest |
+| Tokens del subagente | 122 mil | 286 mil |
+
+- **Tiempo.** Los dos en serie habrían sido 29,5 minutos de implementación; a la vez fueron 22,9, un 22 % menos. La diferencia real es mayor: durante esos 23 minutos el orquestador revisó TWO-27 con dos subagentes, aplicó un arreglo, repitió `just check`, abrió su PR a los 11,6 minutos del lanzamiento y arrancó un tercer ticket (TWO-43) en el hueco que quedó libre. De referencia, los doce PR anteriores tardaron de 8 a 111 minutos del primer commit a la fusión, con mediana de 22.
+- **Choques.** Las dos ramas solo comparten el `justfile`, que estaba previsto: cada una añade su receta en un sitio distinto. Ningún test falló por datos de otro agente y la base de la carpeta principal acabó con su seed.
+- **Lo que no midió.** La fusión: los dos PR esperan a una persona, así que el piloto no dice cuánto tarda el ciclo entero ni cómo sale el `merge` de `main` en la segunda rama. Tampoco midió tres agentes.
+- **Coste.** Cada revisión de dos subagentes añadió unos 170 mil tokens. Con el límite semanal del plan Max ya al 60 %, el paralelismo adelanta el día en que se agota: acorta el reloj, no el gasto.
+
 ## Consecuencias
 
 - Un agente que olvide exportar las tres variables prueba contra la base de la carpeta principal. Hasta TWO-43, el encargo de cada agente las lleva escritas, y el orquestador comprueba el seed de la carpeta principal al cerrar la tanda.
