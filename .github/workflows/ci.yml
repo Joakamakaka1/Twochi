@@ -66,7 +66,7 @@ jobs:
             fi >> "$GITHUB_OUTPUT"
           }
           # By folder, not by extension: prompts, fixtures and data also feed the tests.
-          flag '(\.py$|^packages/|^apps/(api|worker|mcp)/|^\.github/scripts/|^pyproject\.toml$|^uv\.lock$|^\.python-version$)' python
+          flag '(\.py$|^packages/|^apps/(api|worker|mcp)/|^supabase/|^\.github/scripts/|^pyproject\.toml$|^uv\.lock$|^\.python-version$)' python
           # A change in apps/api also checks the front, which depends on its contract.
           flag '^(apps/web/|apps/api/|packages/api-client/|package\.json$|pnpm-lock\.yaml$|pnpm-workspace\.yaml$)' web
           flag '^infra/' infra
@@ -88,8 +88,12 @@ jobs:
       - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
         with:
           version: ${{ env.MISE_VERSION }}
-          install_args: python uv node just
+          install_args: python uv node just aqua:supabase/cli
       - run: uv sync --locked
+      # Only Postgres, with the migrations and the local seed: use-case, data and API
+      # tests run against it with real RLS (Arquitectura y convenciones, «Tests»).
+      - run: supabase db start
+      - run: just check-db
       - run: just check-py
 
   web:

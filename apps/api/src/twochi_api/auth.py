@@ -3,7 +3,7 @@ expiry and the second factor (aal2). The user id always comes from here.
 """
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 from uuid import UUID
@@ -30,7 +30,10 @@ type SigningKeyLookup = Callable[[str], jwt.PyJWK]
 
 @dataclass(frozen=True, slots=True)
 class Principal:
+    """Who sent the request, and the claims of their verified token for RLS."""
+
     user_id: UUID
+    claims: Mapping[str, object]
 
 
 class UnauthenticatedError(TwochiError):
@@ -82,7 +85,7 @@ class TokenVerifier:
         if claims.get("aal") != "aal2":
             _log.warning("auth rejected: second factor missing")
             raise MfaRequiredError
-        return Principal(user_id=user_id)
+        return Principal(user_id=user_id, claims=claims)
 
 
 def _rejected(error: Exception) -> UnauthenticatedError:

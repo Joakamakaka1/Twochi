@@ -1,0 +1,27 @@
+# 0007. Las altas salen de una tabla que rellena un script local
+
+- Estado: aceptada
+- Fecha: 2026-11-22
+- Completa Datos y vectores, «Inicio de sesión: Google y doble factor», que no decía dónde vive la lista de dos correos ni cómo nacen la pareja, los perfiles y las mascotas
+
+## Contexto
+
+El hook de altas (Before User Created Hook) rechaza cualquier correo que no sea de la pareja. El documento pone su función en las migraciones, pero el repositorio es público: escribir los correos en la función los publicaría. Además, nada decía cómo se crean la pareja, los perfiles y las mascotas, ni cómo tiene el usuario de humo una mascota que cuidar.
+
+## Decisión
+
+- La lista vive en la tabla `app.signup_allowlist`, con el correo, la pareja y el nombre visible. La migración crea la tabla y el hook; ninguna fila entra en git.
+- La receta `just provision` rellena la tabla desde un fichero local ignorado por git. Crea las parejas, sus filas en la lista y los nombres y modelos de las mascotas. Es idempotente y la lanza la IA con tu aprobación cuando escribe en producción.
+- El hook acepta un alta solo si el correo está en la lista. Un trigger sobre el alta crea el perfil en su pareja y, cuando llega la segunda persona, las dos mascotas: cada una representa a una persona y la cuida la otra.
+- La pareja de prueba tiene al usuario de humo y a un segundo usuario de prueba sin contraseña que nunca entra. Los crea `just provision` con la API de administración, así que existen aunque las altas estén cerradas.
+
+## Alternativas descartadas
+
+- Correos en la función del hook: los publicaría en el repositorio.
+- Insertar a mano en Studio: no se repite igual en local, en CI ni para la pareja de prueba.
+- Alta en la app con código de invitación: añade una pantalla y un flujo que el documento no pide, para dos personas que ya se conocen.
+
+## Consecuencias
+
+- Hasta que se ejecute `just provision`, el hook rechaza a todo el mundo, también a vosotros dos. El orden es este: migración, `provision`, vuestras altas con Google y TOTP, y después se cierran las altas (TWO-13).
+- Cambiar la pareja o añadir una persona es editar el fichero local y volver a lanzar `provision`, no hacer una migración.

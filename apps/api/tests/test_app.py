@@ -1,19 +1,23 @@
-"""The mounted API with a fixed signing key: auth at the edge and the error shape."""
+"""The mounted API with a fixed signing key: auth at the edge, the error shape and
+the responses, with local Supabase behind the routes that read the game."""
 
 import json
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
 import pytest
+from conftest import API_URL, Couples, TestCouple
 from cryptography.hazmat.primitives.asymmetric import ec
 from fastapi.testclient import TestClient
 from jwt.algorithms import ECAlgorithm
 
 from twochi_api.app import create_app
 from twochi_api.auth import TokenVerifier
+from twochi_application.testing import FixedClock
+from twochi_data.database import PostgresDatabase
 
 ISSUER = "https://example-project.supabase.co/auth/v1"
 AUDIENCE = "authenticated"
@@ -53,10 +57,16 @@ def token(
     return jwt.encode(claims, key, algorithm="ES256", headers={"kid": KID})
 
 
-def app_with(lookup: Callable[[str], jwt.PyJWK]) -> TestClient:
+NOW = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
+
+
+def app_with(
+    lookup: Callable[[str], jwt.PyJWK], *, database_url: str | None = API_URL
+) -> TestClient:
     verifier = TokenVerifier(issuer=ISSUER, audience=AUDIENCE, signing_key=lookup)
+    app = create_app(verifier, db=PostgresDatabase(database_url), clock=FixedClock(NOW))
     # Unexpected errors must still answer with a problem, so they are not re-raised.
-    return TestClient(create_app(verifier), raise_server_exceptions=False)
+    return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture
@@ -206,3 +216,88 @@ def test_unexpected_error_is_a_problem_without_details() -> None:
     assert response.headers["content-type"] == "application/problem+json"
     assert response.json()["code"] == "internal_error"
     assert "secret internals" not in response.text
+
+
+# Casa. The client is a context manager: one event loop for the database connection.
+
+
+@pytest.fixture
+def game() -> Iterator[TestClient]:
+    with app_with(lambda _token: public_jwk()) as client:
+        yield client
+
+
+def home(client: TestClient, auth: str | None) -> Any:
+    headers = {} if auth is None else {"X-Twochi-Auth": auth}
+    return client.get("/api/home", headers=headers)
+
+
+def token_of(couple: TestCouple, user: uuid.UUID, **overrides: Any) -> str:
+    return token(sub=str(user), couple_id=str(couple.id), **overrides)
+
+
+@pytest.mark.anyio
+async def test_home_returns_the_pet_the_caller_cares_for(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create(updated_at=NOW - timedelta(hours=1))
+
+    response = home(game, token_of(couple, couple.bruno))
+
+    assert response.status_code == 200
+    pet = response.json()["pet"]
+    assert pet["id"] == str(couple.pet_of_alice.id)
+    assert pet["name"] == "Ali"
+    assert pet["model_key"] == "placeholder"
+    assert pet["asleep"] is False
+    assert pet["mood"] == "happy"
+    assert set(pet["needs"]) == {"hunger", "energy", "hygiene", "fun", "affection"}
+    assert pet["needs"]["hunger"] == {
+        "value": 74.0,
+        "updated_at": "2026-11-22T12:00:00Z",
+        "rate_per_hour": -6.0,
+    }
+
+
+@pytest.mark.anyio
+async def test_home_has_no_pet_until_both_people_arrive(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create(with_pets=False)
+
+    response = home(game, token_of(couple, couple.bruno))
+
+    assert response.status_code == 200
+    assert response.json() == {"pet": None}
+
+
+def test_home_needs_a_token(game: TestClient) -> None:
+    response = home(game, None)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "unauthenticated"
+
+
+def test_home_needs_the_second_factor(game: TestClient) -> None:
+    response = home(game, token(aal="aal1"))
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "mfa_required"
+
+
+def test_home_without_a_database_is_a_problem_not_a_crash() -> None:
+    unreachable = "postgresql://twochi_api:x@127.0.0.1:1/postgres"
+    with app_with(lambda _token: public_jwk(), database_url=unreachable) as client:
+        response = home(client, token())
+
+    assert response.status_code == 503
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "database_unavailable"
+
+
+def test_home_without_a_configured_database_is_unavailable() -> None:
+    with app_with(lambda _token: public_jwk(), database_url=None) as client:
+        response = home(client, token())
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "database_unavailable"
