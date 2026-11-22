@@ -64,20 +64,19 @@ class Check:
     passes: Callable[[Response], bool]
 
 
-def _is_json(body: bytes) -> bool:
+def _says_ok(body: bytes) -> bool:
     try:
-        json.loads(body)
+        return json.loads(body) == {"status": "ok"}
     except ValueError:
         return False
-    return True
 
 
 CHECKS = (
     Check(
         "/api/health",
-        "200 application/json, a JSON body",
+        '200 application/json, {"status":"ok"}',
         lambda response: (
-            response.is_a(200, "application/json") and _is_json(response.body)
+            response.is_a(200, "application/json") and _says_ok(response.body)
         ),
     ),
     # The front: index.html, or what S3 answers through OAC for a key that is not
