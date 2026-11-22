@@ -16,7 +16,9 @@ class CareActionIn(BaseModel):
     """One tap: the front reuses its key when it retries that same tap."""
 
     action: CareAction
-    idempotency_key: str = Field(min_length=1, max_length=64)
+    # The front sends a UUID; anything outside this set, such as a NUL, is refused
+    # here instead of failing in Postgres.
+    idempotency_key: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
 
 
 class CareActionOut(BaseModel):

@@ -427,9 +427,17 @@ async def test_another_couples_pet_is_a_404_problem(
         (USER_ID, {"action": "feed"}),
         (USER_ID, {"action": "feed", "idempotency_key": ""}),
         (USER_ID, {"action": "feed", "idempotency_key": "k" * 65}),
+        (USER_ID, {"action": "feed", "idempotency_key": "nul\u0000"}),
         ("not-a-uuid", {"action": "feed", "idempotency_key": "k"}),
     ],
-    ids=["unknown-action", "no-key", "empty-key", "long-key", "bad-pet-id"],
+    ids=[
+        "unknown-action",
+        "no-key",
+        "empty-key",
+        "long-key",
+        "nul-in-key",
+        "bad-pet-id",
+    ],
 )
 def test_an_invalid_care_action_is_a_422_problem(
     game: TestClient, pet_id: object, body: object
@@ -453,3 +461,19 @@ def test_a_care_action_needs_the_second_factor(game: TestClient) -> None:
 
     assert response.status_code == 403
     assert response.json()["code"] == "mfa_required"
+
+
+@pytest.mark.anyio
+async def test_a_key_reused_for_another_action_is_a_422_problem(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create(updated_at=NOW)
+    auth = token_of(couple, couple.bruno)
+    pet = couple.pet_of_alice.id
+    care(game, auth, pet, {"action": "feed", "idempotency_key": "reused"})
+
+    response = care(game, auth, pet, {"action": "bathe", "idempotency_key": "reused"})
+
+    assert response.status_code == 422
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "idempotency_key_reused"

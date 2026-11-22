@@ -46,6 +46,10 @@ class PetNotFoundError(TwochiError):
     """The pet does not exist for the actor: unknown, or another couple's under RLS."""
 
 
+class IdempotencyKeyReusedError(TwochiError):
+    """The key already names another request on this pet, not a retry of this one."""
+
+
 async def apply_care_action(
     cmd: ApplyCareAction, *, db: Database, clock: Clock
 ) -> CareResult:
@@ -62,8 +66,14 @@ async def apply_care_action(
         now = clock.now()
         stored = await tx.events.stored_care(pet.id, cmd.idempotency_key)
         if stored is not None:
+            # Only the same action from the same person is a retry of that tap.
+            if stored.action != cmd.action or stored.actor != cmd.actor.user_id:
+                raise IdempotencyKeyReusedError
             return CareResult(
-                applied=True, rejection=None, deltas=stored, pet=read_pet(pet, now=now)
+                applied=True,
+                rejection=None,
+                deltas=stored.deltas,
+                pet=read_pet(pet, now=now),
             )
         recent = await tx.events.effective_pets_since(pet.id, now - PETTING_WINDOW)
         outcome = apply_care(

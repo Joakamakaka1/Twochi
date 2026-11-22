@@ -4,15 +4,15 @@ import json
 from collections.abc import Mapping
 from datetime import datetime
 
-from twochi_application.ports import CareRecord
-from twochi_data.sql import Connection, int_at, text_at
-from twochi_domain.care import RULES_VERSION
+from twochi_application.ports import CareRecord, StoredCare
+from twochi_data.sql import Connection, Row, int_at, text_at, uuid_at
+from twochi_domain.care import RULES_VERSION, CareAction
 from twochi_domain.errors import TwochiError
-from twochi_domain.ids import PetId
+from twochi_domain.ids import PetId, UserId
 from twochi_domain.needs import Need
 
 _STORED_CARE = """
-select deltas::text as deltas
+select source, action, actor_user_id, deltas::text as deltas
 from app.pet_events
 where pet_id = $1 and idempotency_key = $2
 """
@@ -44,10 +44,10 @@ class PostgresPetEventRepository:
 
     async def stored_care(
         self, pet_id: PetId, idempotency_key: str
-    ) -> Mapping[Need, float] | None:
-        """The deltas of the care action already recorded with this key, if any."""
+    ) -> StoredCare | None:
+        """The event already recorded on this pet with this key, if any."""
         rows = await self._connection.fetch(_STORED_CARE, pet_id, idempotency_key)
-        return _to_deltas(text_at(rows[0], "deltas")) if rows else None
+        return _to_stored_care(rows[0]) if rows else None
 
     async def effective_pets_since(self, pet_id: PetId, since: datetime) -> int:
         """How many pettings with effect this pet got after `since`."""
@@ -77,6 +77,18 @@ class PostgresPetEventRepository:
 
 class UnexpectedDeltasError(TwochiError):
     """Stored deltas that are not a map of need to number: a schema drift."""
+
+
+def _to_stored_care(row: Row) -> StoredCare:
+    action = text_at(row, "action")
+    if text_at(row, "source") != "ui" or action not in CareAction:
+        # Not a care action from the interface: its deltas need not be a need map.
+        return StoredCare(action=None, actor=None, deltas={})
+    return StoredCare(
+        action=CareAction(action),
+        actor=UserId(uuid_at(row, "actor_user_id")),
+        deltas=_to_deltas(text_at(row, "deltas")),
+    )
 
 
 def _to_deltas(raw: str) -> Mapping[Need, float]:

@@ -21,6 +21,7 @@ La spec ordenaba además la idempotencia así: buscar la clave y, si no está, b
 - La política de `insert` en `pet_events` es más estricta que la de lectura. Exige que el evento sea de la pareja, a nombre de quien llama (`actor_user_id = auth.uid()`) y nunca con `source = 'system'`.
 - `pet_events.created_at` lo pone el caso de uso con su `now`, para que la ventana de una hora de las caricias efectivas use el mismo reloj que el motor.
 - `apply_care_action` primero bloquea la mascota con `for update` y después busca la clave. Así un duplicado espera al primero y encuentra su evento.
+- Una clave solo repite la misma acción de la misma persona. Si ya nombra otra acción, a otra persona o un evento que no es de cuidado, la API responde 422 `idempotency_key_reused`, como propone el borrador del IETF sobre la cabecera `Idempotency-Key`.
 
 ## Alternativas descartadas
 
@@ -30,4 +31,5 @@ La spec ordenaba además la idempotencia así: buscar la clave y, si no está, b
 ## Consecuencias
 
 - El token del navegador tiene en teoría esos permisos, pero no puede usarlos: `app` no está expuesto en la Data API ni en GraphQL. Exponer `app` algún día obliga a revisar esta decisión.
+- Las políticas no exigen ser el cuidador: lo decide el motor. Exigirlo en RLS haría que `for update` ocultara la mascota a la persona representada, y su acción daría un 404 en vez del rechazo `not_caretaker` que pide la spec.
 - La propiedad «la media nunca sube entre dos acciones» de la spec es falsa en un caso límite. Si la mascota duerme y las necesidades que bajan llegan a 0, la energía sigue subiendo 12 por hora y la media sube. Las reglas no cambian. El test acota la propiedad y documenta la excepción con un ejemplo. Decidido contigo el 2026-11-22.

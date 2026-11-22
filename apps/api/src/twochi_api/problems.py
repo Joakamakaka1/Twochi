@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from twochi_api.auth import AuthUnavailableError, MfaRequiredError, UnauthenticatedError
-from twochi_application.care import PetNotFoundError
+from twochi_application.care import IdempotencyKeyReusedError, PetNotFoundError
 from twochi_application.ports import DatabaseUnavailableError
 
 PROBLEM_JSON = "application/problem+json"
@@ -44,6 +44,11 @@ async def _pet_not_found(_request: Request, _error: Exception) -> JSONResponse:
     return problem(404, "not_found", "Request failed")
 
 
+async def _idempotency_key_reused(_request: Request, _error: Exception) -> JSONResponse:
+    # A key names one request: reusing it for another is a client error, not a retry.
+    return problem(422, "idempotency_key_reused", "Idempotency key already used")
+
+
 async def _invalid_request(_request: Request, _error: Exception) -> JSONResponse:
     return problem(422, "invalid_request", "Invalid request")
 
@@ -65,6 +70,7 @@ def install(app: FastAPI) -> None:
     app.add_exception_handler(AuthUnavailableError, _auth_unavailable)
     app.add_exception_handler(DatabaseUnavailableError, _database_unavailable)
     app.add_exception_handler(PetNotFoundError, _pet_not_found)
+    app.add_exception_handler(IdempotencyKeyReusedError, _idempotency_key_reused)
     app.add_exception_handler(RequestValidationError, _invalid_request)
     app.add_exception_handler(HTTPException, _http_error)
     # Anything else: a problem without details; Starlette still logs the traceback.

@@ -12,6 +12,7 @@ from twochi_application.actors import UserActor
 from twochi_application.care import (
     ApplyCareAction,
     CareResult,
+    IdempotencyKeyReusedError,
     PetNotFoundError,
     apply_care_action,
 )
@@ -315,3 +316,42 @@ async def test_a_double_tap_at_once_applies_once(couples: Couples) -> None:
 
     assert [r.deltas for r in results] == [{Need.HUNGER: 30}, {Need.HUNGER: 30}]
     assert seen[Need.HUNGER] == 50
+
+
+async def test_a_key_reused_for_another_action_is_refused_and_changes_nothing(
+    couples: Couples, db: PostgresDatabase
+) -> None:
+    couple = await couples.create(needs_of_alices_pet={Need.HYGIENE: 10}, updated_at=T0)
+    await bruno_cares(db, couple, CareAction.FEED, key="reused")
+
+    with pytest.raises(IdempotencyKeyReusedError):
+        await bruno_cares(db, couple, CareAction.BATHE, key="reused")
+
+    assert (await needs_seen_by_bruno(db, couple))[Need.HYGIENE] == 10
+
+
+async def test_someone_else_replaying_a_key_is_refused(
+    couples: Couples, db: PostgresDatabase
+) -> None:
+    couple = await couples.create(updated_at=T0)
+    await bruno_cares(db, couple, CareAction.FEED, key="bruno-tap")
+    alice = couple.actor(couple.alice)
+
+    with pytest.raises(IdempotencyKeyReusedError):
+        await care(db, alice, couple.pet_of_alice.id, CareAction.FEED, key="bruno-tap")
+
+
+async def test_a_key_already_used_by_a_system_event_is_not_a_care_replay(
+    couples: Couples, db: PostgresDatabase
+) -> None:
+    couple = await couples.create(updated_at=T0)
+    await couples.admin.execute(
+        "insert into app.pet_events "
+        "(couple_id, pet_id, source, action, rules_version, idempotency_key) "
+        "values ($1, $2, 'system', 'birth', 'test', 'birth-key')",
+        couple.id,
+        couple.pet_of_alice.id,
+    )
+
+    with pytest.raises(IdempotencyKeyReusedError):
+        await bruno_cares(db, couple, CareAction.FEED, key="birth-key")

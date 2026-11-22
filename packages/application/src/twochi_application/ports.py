@@ -43,8 +43,8 @@ class PetEventRepository(Protocol):
 
     async def stored_care(
         self, pet_id: PetId, idempotency_key: str
-    ) -> Mapping[Need, float] | None:
-        """The deltas of the care action already recorded with this key, if any."""
+    ) -> StoredCare | None:
+        """The event already recorded on this pet with this key, if any."""
         ...
 
     async def effective_pets_since(self, pet_id: PetId, since: datetime) -> int:
@@ -56,6 +56,16 @@ class PetEventRepository(Protocol):
     ) -> None:
         """Record an applied care action, from the interface, under its key."""
         ...
+
+
+@dataclass(frozen=True, slots=True)
+class StoredCare:
+    """An event found by its key. `action` is None when it is not a care action from
+    the interface, such as a birth; its deltas are then left empty."""
+
+    action: CareAction | None
+    actor: UserId | None
+    deltas: Mapping[Need, float]
 
 
 @dataclass(frozen=True, slots=True)
