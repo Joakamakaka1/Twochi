@@ -8,6 +8,11 @@ from pydantic import BaseModel, Field
 
 from twochi_api import problems
 from twochi_api.auth import AUTH_HEADER, Principal, TokenVerifier
+from twochi_api.home import HomeOut, home_out
+from twochi_application.actors import UserActor
+from twochi_application.home import get_home
+from twochi_application.ports import Clock, Database
+from twochi_domain.ids import UserId
 
 
 class Health(BaseModel):
@@ -23,8 +28,8 @@ class PingResponse(BaseModel):
     nonce: str
 
 
-def create_app(verifier: TokenVerifier) -> FastAPI:
-    """Build the API around an already configured token verifier."""
+def create_app(verifier: TokenVerifier, *, db: Database, clock: Clock) -> FastAPI:
+    """Build the API around a configured token verifier and the adapters it needs."""
     app = FastAPI(
         title="Twochi API",
         openapi_url="/api/openapi.json",
@@ -50,5 +55,13 @@ def create_app(verifier: TokenVerifier) -> FastAPI:
         body: PingRequest, who: Annotated[Principal, Depends(principal)]
     ) -> PingResponse:
         return PingResponse(user_id=who.user_id, nonce=body.nonce)
+
+    # Casa is one view per caller: `me` keeps the collection noun plural.
+    @app.get("/api/homes/me")
+    async def home(  # pyright: ignore[reportUnusedFunction]
+        who: Annotated[Principal, Depends(principal)],
+    ) -> HomeOut:
+        actor = UserActor(user_id=UserId(who.user_id), claims=who.claims)
+        return home_out(await get_home(actor, db=db, clock=clock))
 
     return app

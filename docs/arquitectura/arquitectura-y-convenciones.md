@@ -289,7 +289,7 @@ Los cinco puntos quedaron alineados el 21 de noviembre, salvo el glosario, que n
 | IA y calidad, y Salida estructurada en la principal | `Turno` pasa a `Turn`, con `emotion`, `animation`, `text` y `proposed_actions`; `Accion` pasa a `Action`. Ya aplicado |
 | Front móvil y 3D | Los clips del GLB se nombran en inglés: `idle`, `happy`, `sad`, `eat`, `sleep`, `angry` y `surprised`. Ya aplicado |
 | Forma de trabajo | `CODING_STANDARDS.md` se destila de esta pestaña y `just check` incluye los contratos de import. Ya aplicado allí |
-| `GLOSSARY.md` | Cada término gana su identificador: mascota es `Pet`; pareja, `Couple`; ficha, `Profile`; turno, `Turn`; recado, `Errand` |
+| `GLOSSARY.md` | Cada término gana su identificador: mascota es `Pet`; pareja, `Couple`; ficha, `Persona` (la tabla `profiles` es otra cosa: una fila por persona de la pareja); turno, `Turn`; recado, `Errand` |
 
 El español se queda donde lo lee una persona o el modelo: prompts, textos de la app, documentación, ADR y glosario.
 

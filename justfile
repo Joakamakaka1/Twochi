@@ -18,9 +18,14 @@ setup:
     uvx pre-commit@4.7.0 install
 
 # Everything CI checks, in order. CI runs these same recipes, one job each.
-check: check-py check-web check-workflows check-infra
+check: check-db check-py check-web check-workflows check-infra
+
+# Database: lint the local schema. Needs local Supabase (`just up`), as the tests do.
+check-db:
+    supabase db lint --level warning --fail-on warning
 
 # Python: format, lint, types, import contracts and tests with the domain coverage gate.
+# Use-case, data and API tests run against local Supabase: start it with `just up`.
 check-py:
     uv run --locked ruff format --check .
     uv run --locked ruff check .
@@ -64,9 +69,13 @@ test:
     uv run --locked pytest
     pnpm -r --if-present run test
 
-# Start local Supabase (needs Docker).
+# Start local Supabase (needs Docker). Twochi uses ports 553xx, apart from other projects.
 up:
     supabase start
+
+# Rebuild the local database from the migrations and the seed.
+reset:
+    supabase db reset
 
 # Stop local Supabase.
 down:

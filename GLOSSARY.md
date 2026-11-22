@@ -15,7 +15,7 @@ La persona de la pareja a la que caricaturiza una mascota.
 La persona que cuida una mascota: siempre la pareja de la persona representada.
 _Evitar_: dueño
 
-**Ficha** (`Profile`):
+**Ficha** (`Persona`):
 Lo que el juego sabe de una persona para que su mascota hable como ella: rasgos, gustos y ejemplos de voz.
 _Evitar_: perfil, persona
 
@@ -23,6 +23,9 @@ _Evitar_: perfil, persona
 Un dato atómico de la ficha, con su autor y su perspectiva: lo dice la propia persona o su pareja.
 
 ## Mascota y cuidado
+
+**Casa** (`Home`):
+La pantalla donde vive la mascota que cuidas, con cuatro habitaciones: cocina, baño, dormitorio y salón.
 
 **Mascota** (`Pet`):
 El avatar 3D de una persona de la pareja, con sus necesidades, su nivel y su voz.
@@ -33,14 +36,17 @@ Una de las cinco medidas de 0 a 100 que bajan con el tiempo real: hambre (`hunge
 _Evitar_: stat, barra
 
 **Despierta / dormida** (`asleep`):
-El estado de la mascota que decide a qué ritmo cambia cada necesidad.
+El estado de la mascota que decide a qué ritmo cambia cada necesidad. Solo su cuidador la duerme y la despierta; nunca se despierta sola.
 
-**Ánimo**:
-El estado visible de la mascota, sacado de la media de sus necesidades: feliz, normal, triste o enferma.
+**Ánimo** (`Mood`):
+El estado visible de la mascota, sacado de la media de sus necesidades: feliz, normal, triste o enferma. Una necesidad muy baja la deja como mucho triste.
 _Evitar_: humor, felicidad
 
+**Enferma** (`sick`):
+El ánimo más bajo. Empieza cuando la media de las necesidades cae muy abajo y dura hasta que el cuidador devuelve todas a un nivel aceptable, aunque la media ya haya subido.
+
 **Acción de cuidado** (`CareAction`):
-Lo que hace el cuidador desde la interfaz para cambiar las necesidades: dar de comer, jugar, acariciar, bañar o dormir.
+Lo que hace el cuidador desde la interfaz para cambiar las necesidades: dar de comer, jugar, acariciar, bañar, dormir o despertar.
 _Evitar_: interacción
 
 **Acción** (`Action`):
