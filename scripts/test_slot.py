@@ -13,6 +13,7 @@ from conftest import database_urls
 from slot import (
     EXCLUDED_SERVICES,
     SlotError,
+    checkout_problems,
     config_problems,
     main,
     removal_problems,
@@ -100,11 +101,87 @@ def test_a_twochi_port_inside_a_url_moves_too() -> None:
     assert 'api_url = "http://127.0.0.1:55521"' in slot_config(config, 2)
 
 
+# --- A slot keeps its own config ------------------------------------------------------
+
+MAIN_FOLDER = Path("/dev/twochi")
+SLOT_2 = MAIN_FOLDER / ".claude" / "worktrees" / "slot-2"
+
+
+def test_a_slot_on_its_own_config_has_no_problem() -> None:
+    assert checkout_problems(SLOT_2, slot_config(MAIN, 2)) == []
+
+
+def test_a_slot_back_on_the_main_folders_config_is_a_problem() -> None:
+    # What clearing skip-worktree, a checkout or a merge leaves behind.
+    problems = checkout_problems(SLOT_2, MAIN)
+
+    assert 'project_id is "twochi", not "twochi-s2"' in problems[0]
+    assert "55322" in " ".join(problems)
+
+
+def test_a_slot_on_another_slots_config_is_a_problem() -> None:
+    assert checkout_problems(SLOT_2, slot_config(MAIN, 1)) != []
+
+
+def test_a_slots_project_on_other_ports_is_a_problem_port_by_port() -> None:
+    by_hand = MAIN.replace('"twochi"', '"twochi-s2"', 1)
+
+    assert len(checkout_problems(SLOT_2, by_hand)) == 7
+
+
+def test_a_slot_whose_config_is_not_toml_is_a_problem() -> None:
+    assert checkout_problems(SLOT_2, "project_id = twochi-s2") != []
+
+
+@pytest.mark.parametrize(
+    "folder",
+    [
+        MAIN_FOLDER,
+        MAIN_FOLDER / ".claude" / "worktrees" / "youthful-lichterman-56d803",
+        MAIN_FOLDER / ".claude" / "worktrees" / "slot-0",
+        Path("/elsewhere/slot-2"),
+    ],
+)
+def test_a_folder_that_is_no_slot_is_not_judged(folder: Path) -> None:
+    assert checkout_problems(folder, MAIN) == []
+    assert checkout_problems(folder, slot_config(MAIN, 3)) == []
+
+
+def checkout_at(folder: Path, config: str) -> Path:
+    (folder / "supabase").mkdir(parents=True)
+    (folder / "supabase" / "config.toml").write_text(config, encoding="utf-8")
+    return folder
+
+
+def test_the_check_command_refuses_a_slot_on_the_main_folders_config(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    lost = checkout_at(tmp_path / "a" / ".claude" / "worktrees" / "slot-2", MAIN)
+
+    assert main(["check", str(lost)]) == 1
+    assert "twochi-s2" in capsys.readouterr().err
+
+
+def test_the_check_command_passes_a_slot_on_its_config_and_the_main_folder(
+    tmp_path: Path,
+) -> None:
+    slot = tmp_path / "b" / ".claude" / "worktrees" / "slot-2"
+
+    assert main(["check", str(checkout_at(slot, slot_config(MAIN, 2)))]) == 0
+    assert main(["check", str(checkout_at(tmp_path / "c", MAIN))]) == 0
+
+
 # --- The database the tests reach -----------------------------------------------------
+
+ELSEWHERE = {
+    "TWOCHI_TEST_ADMIN_URL": "postgresql://postgres:other@db.twochi.test/postgres",
+    "TWOCHI_TEST_DATABASE_URL": "postgresql://twochi_api:other@db.twochi.test/postgres",
+    "TWOCHI_TEST_BACKUP_URL": "postgresql://twochi_backup:other@db.twochi.test/postgres",
+}
 
 
 def test_in_a_slot_the_tests_reach_the_slots_database() -> None:
-    urls = database_urls(slot_config(MAIN, 2), env={})
+    urls = database_urls(SLOT_2, slot_config(MAIN, 2), env={})
 
     assert urls.admin == "postgresql://postgres:postgres@127.0.0.1:55522/postgres"
     assert urls.api == (
@@ -116,18 +193,37 @@ def test_in_a_slot_the_tests_reach_the_slots_database() -> None:
 
 
 def test_in_the_main_folder_the_tests_reach_twochis_database() -> None:
-    urls = database_urls(MAIN, env={})
+    urls = database_urls(MAIN_FOLDER, MAIN, env={})
 
     assert urls.admin == "postgresql://postgres:postgres@127.0.0.1:55322/postgres"
 
 
 def test_each_variable_still_overrides_its_url() -> None:
-    elsewhere = "postgresql://twochi_api:other@db.twochi.test:5432/postgres"
+    api = ELSEWHERE["TWOCHI_TEST_DATABASE_URL"]
 
-    urls = database_urls(MAIN, env={"TWOCHI_TEST_DATABASE_URL": elsewhere})
+    urls = database_urls(MAIN_FOLDER, MAIN, env={"TWOCHI_TEST_DATABASE_URL": api})
 
-    assert urls.api == elsewhere
+    assert urls.api == api
     assert urls.admin == "postgresql://postgres:postgres@127.0.0.1:55322/postgres"
+
+
+def test_a_slot_on_the_main_folders_config_reaches_no_database() -> None:
+    # Its tests would write to the main folder's database.
+    with pytest.raises(SlotError, match="slot 2"):
+        database_urls(SLOT_2, MAIN, env={})
+
+
+def test_one_variable_does_not_excuse_a_slot_on_the_main_folders_config() -> None:
+    api = ELSEWHERE["TWOCHI_TEST_DATABASE_URL"]
+
+    with pytest.raises(SlotError):
+        database_urls(SLOT_2, MAIN, env={"TWOCHI_TEST_DATABASE_URL": api})
+
+
+def test_the_three_variables_say_where_and_the_config_is_not_judged() -> None:
+    urls = database_urls(SLOT_2, MAIN, env=ELSEWHERE)
+
+    assert [urls.admin, urls.api, urls.backup] == list(ELSEWHERE.values())
 
 
 # --- The pre-commit guard -------------------------------------------------------------
@@ -197,6 +293,8 @@ def test_the_config_git_holds_is_the_main_folders() -> None:
     ).stdout
 
     assert config_problems(held) == []
+    # And `just slot` can still rewrite it: a drift of the real file breaks here.
+    assert tomllib.loads(slot_config(held, 1))["db"]["port"] == 55422
 
 
 # --- Which slot, and when it may go ---------------------------------------------------
