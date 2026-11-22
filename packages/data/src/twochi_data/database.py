@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 
 from twochi_application.actors import UserActor
 from twochi_application.ports import DatabaseUnavailableError
+from twochi_data.events import PostgresPetEventRepository
 from twochi_data.pets import PostgresPetRepository
 from twochi_data.sql import (
     CONNECT_ERRORS,
@@ -28,10 +29,15 @@ class PostgresTransaction:
 
     def __init__(self, connection: Connection) -> None:
         self._pets = PostgresPetRepository(connection)
+        self._events = PostgresPetEventRepository(connection)
 
     @property
     def pets(self) -> PostgresPetRepository:
         return self._pets
+
+    @property
+    def events(self) -> PostgresPetEventRepository:
+        return self._events
 
 
 class PostgresDatabase:

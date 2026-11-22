@@ -49,6 +49,12 @@ El ánimo más bajo. Empieza cuando la media de las necesidades cae muy abajo y 
 Lo que hace el cuidador desde la interfaz para cambiar las necesidades: dar de comer, jugar, acariciar, bañar, dormir o despertar.
 _Evitar_: interacción
 
+**Rechazo** (`Rejection`):
+Por qué el motor no aplica una acción de cuidado: no eres el cuidador (`not_caretaker`), está dormida (`asleep`), ya duerme (`already_asleep`), ya está despierta (`already_awake`) o está demasiado cansada para jugar (`too_tired`). No es un error: la mascota lo anima.
+
+**Caricia efectiva** (`effective`):
+Una caricia que sube el cariño. Con tres caricias efectivas en la última hora, la siguiente se acepta pero no sube nada y no cuenta como efectiva.
+
 **Acción** (`Action`):
 Un cambio de estado que el motor valida y aplica, venga de la interfaz o propuesto en el chat.
 

@@ -109,6 +109,11 @@ def text_at(row: Row, key: str) -> str:
     return _typed(row, key, str)
 
 
+def int_at(row: Row, key: str) -> int:
+    """An integer column, such as a `count(*)`."""
+    return _typed(row, key, int)
+
+
 def float_at(row: Row, key: str) -> float:
     """A `double precision` column."""
     return _typed(row, key, float)

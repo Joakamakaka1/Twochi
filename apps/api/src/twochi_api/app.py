@@ -8,8 +8,10 @@ from pydantic import BaseModel, Field
 
 from twochi_api import problems
 from twochi_api.auth import AUTH_HEADER, Principal, TokenVerifier
+from twochi_api.care import CareActionIn, CareActionOut, care_command, care_out
 from twochi_api.home import HomeOut, home_out
 from twochi_application.actors import UserActor
+from twochi_application.care import apply_care_action
 from twochi_application.home import get_home
 from twochi_application.ports import Clock, Database
 from twochi_domain.ids import UserId
@@ -61,7 +63,20 @@ def create_app(verifier: TokenVerifier, *, db: Database, clock: Clock) -> FastAP
     async def home(  # pyright: ignore[reportUnusedFunction]
         who: Annotated[Principal, Depends(principal)],
     ) -> HomeOut:
-        actor = UserActor(user_id=UserId(who.user_id), claims=who.claims)
-        return home_out(await get_home(actor, db=db, clock=clock))
+        return home_out(await get_home(_actor(who), db=db, clock=clock))
+
+    # A refusal is a 200 with `applied: false`: the front animates it.
+    @app.post("/api/pets/{pet_id}/care-actions")
+    async def care_action(  # pyright: ignore[reportUnusedFunction]
+        pet_id: UUID,
+        body: CareActionIn,
+        who: Annotated[Principal, Depends(principal)],
+    ) -> CareActionOut:
+        command = care_command(_actor(who), pet_id, body)
+        return care_out(await apply_care_action(command, db=db, clock=clock))
 
     return app
+
+
+def _actor(who: Principal) -> UserActor:
+    return UserActor(user_id=UserId(who.user_id), claims=who.claims)

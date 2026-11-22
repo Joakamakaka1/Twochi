@@ -43,10 +43,12 @@ class HomeOut(BaseModel):
 
 def home_out(home: Home) -> HomeOut:
     """Map the use case's result to the response."""
-    return HomeOut(pet=None if home.pet is None else _pet_out(home.pet))
+    return HomeOut(pet=None if home.pet is None else pet_out(home.pet))
 
 
-def _pet_out(reading: PetReading) -> PetOut:
+def pet_out(reading: PetReading) -> PetOut:
+    """Map a pet as read at a moment to its response, the same in Casa and care."""
+
     def need(which: Need) -> NeedOut:
         return _need_out(reading.needs[which])
 

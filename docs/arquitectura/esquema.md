@@ -10,7 +10,7 @@ Postgres guarda todo en un esquema privado con `couple_id` en cada fila. La memo
 Doce reglas que evitan rehacer el esquema más adelante.
 - Esquema `app`, no expuesto. El front no lee ni escribe tablas por la Data API; pasa por tu API. Desde 2026 las tablas nuevas de `public` ya no se exponen solas y requieren `grant` explícito ([Supabase](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)).
 - `couple_id` en casi todas las filas, aunque sea redundante. Las políticas RLS quedan en una línea y los índices son simples.
-- Solo el motor escribe estado de juego. El cliente no tiene `insert` ni `update` sobre nada.
+- Solo el motor escribe estado de juego. El cliente no escribe nada: `authenticated` tiene `insert` y `update` solo en las columnas que escribe el motor, y como `app` no está expuesto, solo los alcanza la API ([ADR 0009](../adr/0009-engine-writes-as-authenticated.md)).
 - Estado más eventos. `pet_needs` guarda el estado actual; `pet_events` es el registro inmutable del que salen diario, rachas, álbum y tiempo real.
 - Idempotencia por clave única: `client_message_id` en mensajes, `idempotency_key` en eventos, `dedupe_key` en avisos. Reintentar nunca duplica. La clave se reserva antes de llamar al modelo: el mensaje del usuario se inserta como pendiente en la primera transacción, y un duplicado en vuelo recibe un 409 o la respuesta ya guardada.
 - Concurrencia explícita. Los dos podéis actuar a la vez sobre la misma mascota: bloquea sus necesidades con `select … for update` dentro de la transacción de la acción.

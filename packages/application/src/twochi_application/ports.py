@@ -1,12 +1,16 @@
 """Ports: what the use cases need across a network, money or chance boundary."""
 
+from collections.abc import Mapping
 from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
 from twochi_application.actors import UserActor
+from twochi_domain.care import Applied, CareAction
 from twochi_domain.errors import TwochiError
-from twochi_domain.ids import UserId
+from twochi_domain.ids import PetId, UserId
+from twochi_domain.needs import Need
 from twochi_domain.pet import Pet
 
 
@@ -25,12 +29,62 @@ class PetRepository(Protocol):
         """The pet this person cares for, or None if it does not exist or is hidden."""
         ...
 
+    async def lock(self, pet_id: PetId) -> Pet | None:
+        """A pet and its needs, locked until the transaction ends; None if hidden."""
+        ...
+
+    async def save(self, pet: Pet) -> None:
+        """Store the pet's sleep state, sickness and needs."""
+        ...
+
+
+class PetEventRepository(Protocol):
+    """The immutable record of what happens to the pets the actor may see."""
+
+    async def stored_care(
+        self, pet_id: PetId, idempotency_key: str
+    ) -> StoredCare | None:
+        """The event already recorded on this pet with this key, if any."""
+        ...
+
+    async def effective_pets_since(self, pet_id: PetId, since: datetime) -> int:
+        """How many pettings with effect this pet got after `since`."""
+        ...
+
+    async def record_care(
+        self, care: CareRecord, *, at: datetime, idempotency_key: str
+    ) -> None:
+        """Record an applied care action, from the interface, under its key."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class StoredCare:
+    """An event found by its key. `action` is None when it is not a care action from
+    the interface, such as a birth; its deltas are then left empty."""
+
+    action: CareAction | None
+    actor: UserId | None
+    deltas: Mapping[Need, float]
+
+
+@dataclass(frozen=True, slots=True)
+class CareRecord:
+    """An applied care action as its event stores it: the pet is the one after it."""
+
+    actor: UserId
+    action: CareAction
+    applied: Applied
+
 
 class Transaction(Protocol):
     """The repositories bound to one open transaction."""
 
     @property
     def pets(self) -> PetRepository: ...
+
+    @property
+    def events(self) -> PetEventRepository: ...
 
 
 class Database(Protocol):

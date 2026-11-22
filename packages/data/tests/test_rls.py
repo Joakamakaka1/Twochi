@@ -151,3 +151,192 @@ async def test_the_token_hook_drops_the_claim_for_someone_without_a_couple() -> 
     stranger = UUID("00000000-0000-4000-8000-00000000dead")
 
     assert await call_hook(stranger) == {"aal": "aal2"}
+
+
+# Writes: only what the engine writes, by couple and with the second factor.
+
+UPDATE_NEED = """
+with changed as (
+  update app.pet_needs set value = 50, updated_at = now()
+  where pet_id = $1 and need = 'hunger'
+  returning 1
+)
+select count(*) as value from changed
+"""
+
+UPDATE_PET = """
+with changed as (
+  update app.pets set asleep = true where id = $1 returning 1
+)
+select count(*) as value from changed
+"""
+
+INSERT_EVENT = """
+with added as (
+  insert into app.pet_events
+    (couple_id, pet_id, actor_user_id, source, action, rules_version, idempotency_key)
+  values ($1, $2, $3, 'ui', 'feed', 'test', gen_random_uuid()::text)
+  returning 1
+)
+select count(*) as value from added
+"""
+
+
+@pytest.mark.parametrize("query", [UPDATE_NEED, UPDATE_PET], ids=["needs", "pets"])
+async def test_a_second_factor_token_updates_its_couples_pets(
+    couples: Couples, query: str
+) -> None:
+    couple = await couples.create()
+
+    changed = await as_authenticated(
+        couple.actor(couple.bruno).claims, query, couple.pet_of_alice.id
+    )
+
+    assert changed == 1
+
+
+@pytest.mark.parametrize("query", [UPDATE_NEED, UPDATE_PET], ids=["needs", "pets"])
+async def test_a_token_without_the_second_factor_updates_nothing(
+    couples: Couples, query: str
+) -> None:
+    couple = await couples.create()
+
+    changed = await as_authenticated(
+        couple.actor(couple.bruno, aal="aal1").claims, query, couple.pet_of_alice.id
+    )
+
+    assert changed == 0
+
+
+@pytest.mark.parametrize("query", [UPDATE_NEED, UPDATE_PET], ids=["needs", "pets"])
+async def test_a_couple_never_updates_another_couples_pets(
+    couples: Couples, query: str
+) -> None:
+    ours = await couples.create()
+    theirs = await couples.create()
+
+    changed = await as_authenticated(
+        ours.actor(ours.bruno).claims, query, theirs.pet_of_alice.id
+    )
+
+    assert changed == 0
+
+
+async def test_a_second_factor_token_records_its_own_event(couples: Couples) -> None:
+    couple = await couples.create()
+
+    added = await as_authenticated(
+        couple.actor(couple.bruno).claims,
+        INSERT_EVENT,
+        couple.id,
+        couple.pet_of_alice.id,
+        couple.bruno,
+    )
+
+    assert added == 1
+
+
+async def test_a_token_without_the_second_factor_records_no_event(
+    couples: Couples,
+) -> None:
+    couple = await couples.create()
+
+    with pytest.raises(Exception, match="row-level security"):
+        await as_authenticated(
+            couple.actor(couple.bruno, aal="aal1").claims,
+            INSERT_EVENT,
+            couple.id,
+            couple.pet_of_alice.id,
+            couple.bruno,
+        )
+
+
+async def test_a_couple_never_records_events_on_another_couples_pet(
+    couples: Couples,
+) -> None:
+    ours = await couples.create()
+    theirs = await couples.create()
+
+    with pytest.raises(Exception, match="row-level security"):
+        await as_authenticated(
+            ours.actor(ours.bruno).claims,
+            INSERT_EVENT,
+            theirs.id,
+            theirs.pet_of_alice.id,
+            ours.bruno,
+        )
+
+
+async def test_nobody_records_an_event_in_someone_elses_name(
+    couples: Couples,
+) -> None:
+    couple = await couples.create()
+
+    with pytest.raises(Exception, match="row-level security"):
+        await as_authenticated(
+            couple.actor(couple.bruno).claims,
+            INSERT_EVENT,
+            couple.id,
+            couple.pet_of_alice.id,
+            couple.alice,
+        )
+
+
+# What `authenticated` may do on each table: reads, plus the engine's writes. Nothing
+# deletes, and couples and profiles are never written from a person's token.
+GRANTS = {
+    "couples": {"SELECT"},
+    "profiles": {"SELECT"},
+    "pets": {"SELECT", "UPDATE"},
+    "pet_needs": {"SELECT", "UPDATE"},
+    "pet_events": {"SELECT", "INSERT"},
+}
+
+PRIVILEGES = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"]
+
+
+@pytest.mark.parametrize("table", TABLES)
+async def test_authenticated_holds_only_the_engines_privileges(table: str) -> None:
+    connection = await connect(ADMIN_URL)
+    try:
+        held = {
+            privilege
+            for privilege in PRIVILEGES
+            if await scalar(
+                connection,
+                # A column grant counts too; deletes and truncates have no columns.
+                "select case when $2 in ('DELETE', 'TRUNCATE') "
+                "  then has_table_privilege('authenticated', $1, $2) "
+                "  else has_any_column_privilege('authenticated', $1, $2) "
+                "end as value",
+                f"app.{table}",
+                privilege,
+            )
+        }
+    finally:
+        await connection.close()
+
+    assert held == GRANTS[table]
+
+
+UPDATABLE_COLUMNS = {
+    "pets": {"asleep", "sick_since"},
+    "pet_needs": {"value", "updated_at"},
+}
+
+
+@pytest.mark.parametrize("table", sorted(UPDATABLE_COLUMNS))
+async def test_the_engine_updates_only_the_state_it_owns(table: str) -> None:
+    connection = await connect(ADMIN_URL)
+    try:
+        rows = await connection.fetch(
+            "select column_name::text as name from information_schema.columns "
+            "where table_schema = 'app' and table_name = $1 "
+            "and has_column_privilege('authenticated', "
+            "  format('app.%I', table_name), column_name, 'UPDATE')",
+            table,
+        )
+    finally:
+        await connection.close()
+
+    assert {text_at(row, "name") for row in rows} == UPDATABLE_COLUMNS[table]
