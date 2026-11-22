@@ -176,14 +176,30 @@ def require_own_config(checkout: Path, config: str) -> None:
         )
 
 
-def removal_problems(*, status: str, unpushed: str) -> list[str]:
-    """What removing a worktree would lose, from `git status --porcelain` and
-    `git log --oneline HEAD --not --remotes` run in it."""
+def removal_problems(
+    *, slot: int, status: str, unpushed: str, config: str, held: str
+) -> list[str]:
+    """What removing slot `slot`'s worktree would lose.
+
+    From `git status --porcelain` and `git log --oneline HEAD --not --remotes` run in
+    it, and from its `supabase/config.toml` (`config`) next to the one git holds at
+    HEAD (`held`): skip-worktree hides that file from `git status`, so an edit of it
+    shows only as a difference from the slot's rewrite of `held`.
+    """
     problems: list[str] = []
     if changes := len(status.splitlines()):
         problems.append(f"{changes} uncommitted changes (`git status`)")
     if commits := len(unpushed.splitlines()):
         problems.append(f"{commits} unpushed commits (`git log HEAD --not --remotes`)")
+    try:
+        untouched = slot_config(held, slot) == config
+    except SlotError:
+        untouched = False  # nothing to compare with: it may hold an edit
+    if not untouched:
+        problems.append(
+            f"a {CONFIG} that is not `just slot`'s rewrite, with changes hidden from "
+            "`git status` by skip-worktree"
+        )
     return problems
 
 
@@ -301,11 +317,15 @@ def down(slot: int, *, force: bool) -> None:
     if folder.exists():
         if not _is_worktree(folder):
             raise SlotError(f"{folder} is not a git worktree: remove it by hand.")
+        config = folder / CONFIG
         problems = removal_problems(
+            slot=slot,
             status=_output("git", "status", "--porcelain", cwd=folder),
             unpushed=_output(
                 "git", "log", "--oneline", "HEAD", "--not", "--remotes", cwd=folder
             ),
+            config=config.read_bytes().decode("utf-8") if config.is_file() else "",
+            held=_output("git", "show", f"HEAD:{CONFIG}", cwd=folder),
         )
         if problems and not force:
             raise SlotError(
