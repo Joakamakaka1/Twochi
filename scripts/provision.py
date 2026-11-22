@@ -38,7 +38,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_FILE = ROOT / "supabase" / "provision.toml"
 DEFAULT_OUT = ROOT / "supabase" / ".provision"
 
-EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+# ASCII only: Python's and Postgres' lower() agree on it, and so does the table's check.
+EMAIL = re.compile(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}")
 MODEL_KEY = re.compile(r"[a-z0-9_-]{1,40}")
 
 
@@ -60,6 +61,8 @@ class Person:
 class CoupleEntry:
     timezone: str
     people: tuple[Person, Person]
+    # How its people sign up: the real couples with Google only.
+    provider: str = "google"
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +75,8 @@ class SmokeCouple:
 
     @property
     def couple(self) -> CoupleEntry:
-        return CoupleEntry(self.timezone, (self.smoke, self.partner))
+        # Created through the admin API with email; nobody signs up as them.
+        return CoupleEntry(self.timezone, (self.smoke, self.partner), provider="email")
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,6 +249,7 @@ class Report:
     rows_removed: int = 0
     users_created: int = 0
     totp_enrolled: bool = False
+    smoke_rotated: bool = False
 
     def __str__(self) -> str:
         return (
@@ -252,10 +257,13 @@ class Report:
             f"{self.rows_written} allowlist rows written, "
             f"{self.rows_removed} removed, {self.users_created} users created, "
             f"smoke TOTP {'enrolled' if self.totp_enrolled else 'unchanged'}"
+            + (", smoke credentials rotated" if self.smoke_rotated else "")
         )
 
 
-async def provision(plan: Plan, target: Target, *, out_dir: Path) -> Report:
+async def provision(
+    plan: Plan, target: Target, *, out_dir: Path, rotate_smoke: bool = False
+) -> Report:
     report = Report()
     couples = [*plan.couples]
     if plan.test_couple is not None:
@@ -267,6 +275,13 @@ async def provision(plan: Plan, target: Target, *, out_dir: Path) -> Report:
         async with connection.transaction():
             for couple in couples:
                 await _allow_couple(connection, couple, report)
+            # The file is the whole list: whoever left it may no longer sign up. A
+            # profile already created stays; the list only gates new signups.
+            status = await connection.execute(
+                "delete from app.signup_allowlist where email <> all($1)",
+                [p.email for c in couples for p in c.people],
+            )
+            report.rows_removed += _affected(status)
         if plan.test_couple is not None:
             async with httpx2.AsyncClient(
                 base_url=f"{target.api_url}/auth/v1",
@@ -282,6 +297,7 @@ async def provision(plan: Plan, target: Target, *, out_dir: Path) -> Report:
                     plan.test_couple,
                     report,
                     out_dir / f"{target.name}.smoke.env",
+                    rotate=rotate_smoke,
                 )
     finally:
         await connection.close()
@@ -291,6 +307,11 @@ async def provision(plan: Plan, target: Target, *, out_dir: Path) -> Report:
 async def _allow_couple(
     connection: Connection, couple: CoupleEntry, report: Report
 ) -> None:
+    known = await connection.fetch(
+        "select 1 from pg_timezone_names where name = $1", couple.timezone
+    )
+    if not known:
+        raise ProvisionError("A couple's timezone is not a known time zone.")
     emails = [p.email for p in couple.people]
     rows = await connection.fetch(
         "select distinct couple_id from app.signup_allowlist where email = any($1)",
@@ -313,27 +334,25 @@ async def _allow_couple(
         couple_id = uuid_at(created[0], "id")
         report.couples_created += 1
     for person in couple.people:
-        status = await connection.execute(_UPSERT_ROW, *_row(person, couple_id))
+        status = await connection.execute(
+            _UPSERT_ROW, *_row(person, couple_id), couple.provider
+        )
         report.rows_written += _affected(status)
-    status = await connection.execute(
-        "delete from app.signup_allowlist where couple_id = $1 and email <> all($2)",
-        couple_id,
-        emails,
-    )
-    report.rows_removed += _affected(status)
 
 
 _UPSERT_ROW = """
 insert into app.signup_allowlist
-  (email, couple_id, display_name, pet_name, pet_model_key)
-values ($1, $2, $3, $4, $5)
+  (email, couple_id, display_name, pet_name, pet_model_key, provider)
+values ($1, $2, $3, $4, $5, $6)
 on conflict (email) do update set
   display_name = excluded.display_name,
   pet_name = excluded.pet_name,
-  pet_model_key = excluded.pet_model_key
+  pet_model_key = excluded.pet_model_key,
+  provider = excluded.provider
 where (signup_allowlist.display_name, signup_allowlist.pet_name,
-       signup_allowlist.pet_model_key)
-  is distinct from (excluded.display_name, excluded.pet_name, excluded.pet_model_key)
+       signup_allowlist.pet_model_key, signup_allowlist.provider)
+  is distinct from (excluded.display_name, excluded.pet_name, excluded.pet_model_key,
+                    excluded.provider)
 """
 
 
@@ -358,6 +377,8 @@ async def _create_test_couple(
     couple: SmokeCouple,
     report: Report,
     credentials_file: Path,
+    *,
+    rotate: bool,
 ) -> None:
     credentials = _read_credentials(credentials_file)
     smoke = await _find_user(connection, couple.smoke.email)
@@ -368,10 +389,25 @@ async def _create_test_couple(
         # Saved before enrolling: a run cut short can still sign in and finish.
         credentials = {"SMOKE_EMAIL": couple.smoke.email, "SMOKE_PASSWORD": password}
         _write_credentials(credentials_file, credentials)
+    elif rotate:
+        # The user keeps its id, profile and pet: deleting it is blocked once its pet
+        # exists, and a new user would never see another birth.
+        password = secrets.token_urlsafe(32)
+        await _call(
+            auth,
+            "PUT",
+            f"/admin/users/{smoke}",
+            "setting a new password",
+            json={"password": password},
+        )
+        await _remove_totp_factors(connection, auth, smoke, verified_too=True)
+        credentials = {"SMOKE_EMAIL": couple.smoke.email, "SMOKE_PASSWORD": password}
+        _write_credentials(credentials_file, credentials)
+        report.smoke_rotated = True
     elif credentials.get("SMOKE_EMAIL") != couple.smoke.email:
         raise ProvisionError(
             f"The smoke user exists, but {credentials_file.name} does not hold its "
-            "password. Delete the user in Auth to create it again."
+            "password. Run `just provision --rotate-smoke` to give it new ones."
         )
 
     if not await _has_verified_totp(connection, smoke, auth):
@@ -382,7 +418,7 @@ async def _create_test_couple(
     elif "SMOKE_TOTP_SECRET" not in credentials:
         raise ProvisionError(
             f"The smoke user has a TOTP factor, but {credentials_file.name} does not "
-            "hold its secret. Delete the factor in Auth to enroll it again."
+            "hold its secret. Run `just provision --rotate-smoke` to enroll a new one."
         )
 
     if await _find_user(connection, couple.partner.email) is None:
@@ -410,22 +446,40 @@ async def _create_user(
 async def _has_verified_totp(
     connection: Connection, user: UUID, auth: httpx2.AsyncClient
 ) -> bool:
+    if await _totp_factors(connection, user, verified=True):
+        return True
+    # Leftovers of an enrolment cut short: Auth refuses a second unverified factor.
+    await _remove_totp_factors(connection, auth, user, verified_too=False)
+    return False
+
+
+async def _totp_factors(
+    connection: Connection, user: UUID, *, verified: bool | None
+) -> list[UUID]:
     rows = await connection.fetch(
         "select id, status::text as status from auth.mfa_factors "
         "where user_id = $1 and factor_type = 'totp'",
         user,
     )
-    if any(text_at(r, "status") == "verified" for r in rows):
-        return True
-    # Leftovers of an enrolment cut short: Auth refuses a second unverified factor.
-    for row in rows:
+    return [
+        uuid_at(r, "id")
+        for r in rows
+        if verified is None or (text_at(r, "status") == "verified") == verified
+    ]
+
+
+async def _remove_totp_factors(
+    connection: Connection, auth: httpx2.AsyncClient, user: UUID, *, verified_too: bool
+) -> None:
+    for factor in await _totp_factors(
+        connection, user, verified=None if verified_too else False
+    ):
         await _call(
             auth,
             "DELETE",
-            f"/admin/users/{user}/factors/{uuid_at(row, 'id')}",
-            "removing an unverified factor",
+            f"/admin/users/{user}/factors/{factor}",
+            "removing a TOTP factor",
         )
-    return False
 
 
 async def _enroll_totp(
@@ -524,8 +578,10 @@ def _read_credentials(path: Path) -> dict[str, str]:
 def _write_credentials(path: Path, credentials: Mapping[str, str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = "".join(f'{key}="{value}"\n' for key, value in credentials.items())
-    path.write_text(text, encoding="utf-8")
-    path.chmod(0o600)
+    # Created owner-only from the start (on POSIX), never readable for a moment.
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+        file.write(text)
 
 
 # --- Command line ---------------------------------------------------------------------
@@ -535,6 +591,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="provision", description=__doc__)
     parser.add_argument("--file", type=Path, default=DEFAULT_FILE)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument(
+        "--rotate-smoke",
+        action="store_true",
+        help="Give the existing smoke user a new password and TOTP, when its "
+        "credentials file is lost.",
+    )
     parser.add_argument(
         "--production",
         action="store_true",
@@ -551,13 +613,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         plan = load_plan(file.read_text(encoding="utf-8"))
         target = production_target(os.environ) if args.production else local_target()
         report = asyncio.run(
-            provision(plan, target, out_dir=cast(Path, args.out)),
+            provision(
+                plan,
+                target,
+                out_dir=cast(Path, args.out),
+                rotate_smoke=cast(bool, args.rotate_smoke),
+            ),
             # The selector loop: Windows' default proactor raises on reset sockets.
             loop_factory=asyncio.SelectorEventLoop,
         )
     except ProvisionError as error:
         sys.stderr.write(f"provision: {error}\n")
         return 1
+    except Exception as error:
+        # Postgres and Auth errors can quote the failing row: name only the error.
+        code = getattr(error, "sqlstate", None)
+        detail = f" (SQLSTATE {code})" if isinstance(code, str) else ""
+        sys.stderr.write(
+            f"provision: failed with {type(error).__name__}{detail}; its message is "
+            "withheld because it may name a person.\n"
+        )
+        return 2
     sys.stdout.write(f"provision {target.name}: {report}.\n")
     return 0
 

@@ -1,7 +1,9 @@
 """`just provision`: the file it reads, the TOTP it computes, and a real run.
 
 The run goes against local Supabase (`just up`): Postgres for the allowlist and Auth for
-the test couple's users, as `provision` does against production.
+the test couple's users, as `provision` does against production. A run makes the
+allowlist match its file, so it clears what other tests left there: these tests must
+not run at the same time as the signup tests.
 """
 
 import asyncio
@@ -58,6 +60,7 @@ def test_emails_are_kept_in_lower_case() -> None:
         couple_toml("secret-alice@twochi.test", "x@t.es", "y@t.es"),
         couple_toml("secret-alice@twochi.test", "secret-alice@twochi.test"),
         couple_toml("secret-alice@twochi.test", "not-an-email"),
+        couple_toml("secret-alice@twochi.test", "josé@twochi.test"),
         couple_toml("secret-alice@twochi.test", "b@t.es").replace(
             '"placeholder"', '"Bad Key"', 1
         ),
@@ -69,6 +72,7 @@ def test_emails_are_kept_in_lower_case() -> None:
         "three-people",
         "repeated-email",
         "bad-email",
+        "non-ascii-email",
         "bad-model-key",
         "empty-name",
         "not-toml",
@@ -196,10 +200,10 @@ def test_provision_twice_writes_once_and_leaves_a_smoke_user_with_aal2(
     assert main(args) == 0
     second = capsys.readouterr().out
 
-    assert first == (
-        "provision local: 2 couples created, 4 allowlist rows written, 0 removed, "
-        "2 users created, smoke TOTP enrolled.\n"
+    assert first.startswith(
+        "provision local: 2 couples created, 4 allowlist rows written, "
     )
+    assert first.endswith(" removed, 2 users created, smoke TOTP enrolled.\n")
     assert second == (
         "provision local: 0 couples created, 0 allowlist rows written, 0 removed, "
         "0 users created, smoke TOTP unchanged.\n"
@@ -228,11 +232,74 @@ def test_provision_twice_writes_once_and_leaves_a_smoke_user_with_aal2(
         )
         == 2
     )
-    credentials = dict(
-        line.split("=", 1)
-        for line in (tmp_path / "out" / "local.smoke.env")
-        .read_text(encoding="utf-8")
-        .replace('"', "")
-        .splitlines()
+    assert sign_in_with_totp(credentials_at(tmp_path / "out"))["aal"] == "aal2"
+
+
+def credentials_at(out: Path) -> dict[str, str]:
+    text = (out / "local.smoke.env").read_text(encoding="utf-8")
+    return dict(line.split("=", 1) for line in text.replace('"', "").splitlines())
+
+
+def test_a_couple_taken_out_of_the_file_leaves_the_allowlist(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    toml = fresh_plan_toml()
+    file = tmp_path / "provision.toml"
+    file.write_text(toml, encoding="utf-8")
+    args = ["--file", str(file), "--out", str(tmp_path / "out")]
+    plan = load_plan(toml)
+    assert main(args) == 0
+    capsys.readouterr()
+
+    file.write_text(toml.split("[test_couple]", 1)[0], encoding="utf-8")
+    assert main(args) == 0
+
+    assert plan.test_couple is not None
+    assert capsys.readouterr().out == (
+        "provision local: 0 couples created, 0 allowlist rows written, 2 removed, "
+        "0 users created, smoke TOTP unchanged.\n"
     )
+    smoke_emails = [p.email for p in plan.test_couple.couple.people]
+    assert (
+        scalar(
+            "select count(*) as value from app.signup_allowlist where email = any($1)",
+            smoke_emails,
+        )
+        == 0
+    )
+
+
+def test_a_lost_credentials_file_is_recovered_only_by_rotating(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    file = tmp_path / "provision.toml"
+    file.write_text(fresh_plan_toml(), encoding="utf-8")
+    out = tmp_path / "out"
+    args = ["--file", str(file), "--out", str(out)]
+    assert main(args) == 0
+    first_password = credentials_at(out)["SMOKE_PASSWORD"]
+    (out / "local.smoke.env").unlink()
+    capsys.readouterr()
+
+    assert main(args) == 1
+    assert "--rotate-smoke" in capsys.readouterr().err
+    assert main([*args, "--rotate-smoke"]) == 0
+
+    assert capsys.readouterr().out.endswith(
+        "smoke TOTP enrolled, smoke credentials rotated.\n"
+    )
+    credentials = credentials_at(out)
+    assert credentials["SMOKE_PASSWORD"] != first_password
     assert sign_in_with_totp(credentials)["aal"] == "aal2"
+
+
+def test_an_unknown_timezone_is_refused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    file = tmp_path / "provision.toml"
+    file.write_text(
+        fresh_plan_toml().replace("Europe/Madrid", "Mars/Olympus", 1), encoding="utf-8"
+    )
+
+    assert main(["--file", str(file), "--out", str(tmp_path / "out")]) == 1
+    assert "timezone" in capsys.readouterr().err

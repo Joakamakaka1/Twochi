@@ -2,11 +2,11 @@
 # supabase/provision.toml, which git ignores, and put the real people there. Fictional
 # data only in this example: no real email or name ever enters the repository.
 #
-# Running `just provision` again after editing the file updates the allowlist: nothing
-# is duplicated, and a person removed from a couple leaves its allowlist.
+# The file is the whole list. Running `just provision` again after editing it updates
+# the allowlist: nothing is duplicated, and whoever left the file leaves the list.
 
-# One table per couple, with exactly two people. Each person's pet is the one that will
-# represent them; the other person cares for it.
+# One table per couple, with exactly two people, who sign up with Google. Each person's
+# pet is the one that will represent them; the other person cares for it.
 [[couples]]
 timezone = "Europe/Madrid"
 

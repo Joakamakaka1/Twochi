@@ -79,7 +79,7 @@ Una tabla fuera de los mapas: no es del juego, sino de quién entra en él ([ADR
 
 | Tabla | Columnas clave | Nota |
 | --- | --- | --- |
-| `signup_allowlist` | `email` (PK, en minúsculas), `couple_id`, `display_name`, `pet_name`, `pet_model_key` | Quién puede registrarse y la mascota que lo representará. La rellena `just provision`; solo la lee el hook de altas y ningún cliente |
+| `signup_allowlist` | `email` (PK, en minúsculas), `couple_id`, `display_name`, `pet_name`, `pet_model_key`, `provider` (google, email) | Quién puede registrarse, cómo y la mascota que lo representará. La escribe `just provision` como admin; la leen el hook y el trigger de altas, nunca un cliente |
 
 ## Acceso: roles, RLS y Realtime
 

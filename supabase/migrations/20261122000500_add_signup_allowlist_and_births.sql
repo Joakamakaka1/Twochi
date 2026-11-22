@@ -13,13 +13,17 @@ create table app.signup_allowlist (
   -- The pet that will represent this person, cared for by the other one.
   pet_name      text not null check (length(pet_name) between 1 and 40),
   pet_model_key text not null check (pet_model_key ~ '^[a-z0-9_-]{1,40}$'),
+  -- How this person may sign up: the couple with Google; only the test couple, which
+  -- `provision` creates through the admin API, with email. A password signup to a
+  -- Google person's email is refused, so nobody takes their place in the couple.
+  provider      text not null default 'google' check (provider in ('google', 'email')),
   created_at    timestamptz not null default now()
 );
 
 create index signup_allowlist_couple on app.signup_allowlist (couple_id);
 
 -- The template, minus the read policy: no client reads the list, through the API or
--- with its own token. Only the hook reads it, and only the email.
+-- with its own token. Only the hook reads it, and only the email and the provider.
 alter table app.signup_allowlist enable row level security;
 revoke all on app.signup_allowlist from public, anon, authenticated;
 
@@ -28,15 +32,16 @@ create policy second_factor on app.signup_allowlist
   using ((select app.has_second_factor()))
   with check ((select app.has_second_factor()));
 
-grant select (email) on app.signup_allowlist to supabase_auth_admin;
+grant select (email, provider) on app.signup_allowlist to supabase_auth_admin;
 
 create policy auth_admin_reads_emails on app.signup_allowlist
   for select to supabase_auth_admin
   using (true);
 
--- Before User Created Hook: Supabase Auth runs it as supabase_auth_admin before inserting
--- any user. `{}` lets the signup through; an error object rejects it. The message never
--- names the email, so a rejection leaks nothing about who is on the list.
+-- Before User Created Hook: Supabase Auth runs it as supabase_auth_admin before a person
+-- signs up (users created through the admin API skip it). `{}` lets the signup through;
+-- an error object rejects it. The message never names the email, so a rejection leaks
+-- nothing about who is on the list.
 create function app.before_user_created_hook(event jsonb)
 returns jsonb
 language sql
@@ -47,6 +52,7 @@ as $$
     when exists (
       select 1 from app.signup_allowlist a
       where a.email = lower(event -> 'user' ->> 'email')
+        and a.provider = event -> 'user' -> 'app_metadata' ->> 'provider'
     ) then '{}'::jsonb
     else jsonb_build_object(
       'error', jsonb_build_object('http_code', 403, 'message', 'Signups are closed.')
@@ -73,9 +79,13 @@ as $$
 declare
   listed app.signup_allowlist%rowtype;
 begin
-  select * into listed from app.signup_allowlist a where a.email = lower(new.email);
-  -- Someone off the list: the hook is the gate. Users inserted by hand (the local seed,
-  -- the tests) get no profile, and without one their token reads nothing.
+  select * into listed
+  from app.signup_allowlist a
+  where a.email = lower(new.email)
+    and a.provider = new.raw_app_meta_data ->> 'provider';
+  -- Someone off the list, or signing up another way than theirs: the hook is the gate,
+  -- and this repeats its rule for the time before it is enabled. Users inserted by hand
+  -- (the local seed, the tests) get no profile, and without one their token reads nothing.
   if not found then
     return null;
   end if;
@@ -84,11 +94,31 @@ begin
   -- the couple's row serializes them.
   perform 1 from app.couples c where c.id = listed.couple_id for update;
 
+  -- A couple is two people. Someone listed after both signed up would read everything
+  -- of theirs and care for nothing: the signup fails instead.
+  if (select count(*) from app.profiles p where p.couple_id = listed.couple_id) >= 2 then
+    raise exception 'This couple already has two people.' using errcode = 'check_violation';
+  end if;
+
   insert into app.profiles (user_id, couple_id, display_name)
   values (new.id, listed.couple_id, listed.display_name);
 
   if (select count(*) from app.profiles p where p.couple_id = listed.couple_id) = 2
      and not exists (select 1 from app.pets p where p.couple_id = listed.couple_id) then
+    -- Both people must still be on the list, by their current email, to name their pets.
+    -- Otherwise no pet would be born and nothing would try again: fail loudly instead.
+    if (
+      select count(*)
+      from app.profiles p
+      join auth.users u on u.id = p.user_id
+      join app.signup_allowlist a
+        on a.email = lower(u.email) and a.couple_id = p.couple_id
+      where p.couple_id = listed.couple_id
+    ) <> 2 then
+      raise exception 'Both people of the couple must be on the allowlist for the birth.'
+        using errcode = 'check_violation';
+    end if;
+
     -- Each pet represents one person and the other cares for it. Born awake, with every
     -- need at the domain's BIRTH_NEED_VALUE and the domain's RULES_VERSION in its event:
     -- test_signups.py fails if these drift from twochi_domain.

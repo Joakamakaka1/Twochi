@@ -15,7 +15,9 @@ El hook de altas (Before User Created Hook) rechaza cualquier correo que no sea 
 - El hook acepta un alta solo si el correo está en la lista. Un trigger sobre el alta crea el perfil en su pareja y, cuando llega la segunda persona, las dos mascotas: cada una representa a una persona y la cuida la otra.
 - La pareja de prueba tiene al usuario de humo y a un segundo usuario de prueba sin contraseña que nunca entra. Los crea `just provision` con la API de administración, así que existen aunque las altas estén cerradas.
 - El trigger es `security definer`, del dueño `postgres` y con `search_path` vacío, y nadie puede llamarlo. El nacimiento lo hace el sistema y no una persona, así que no hay políticas de nadie que aplicar. La alternativa era dar a `supabase_auth_admin` inserts permanentes en cuatro tablas del juego. ADR 0009 descarta `security definer` solo para las escrituras del motor, que sí son de una persona.
-- Una persona que no está en la lista, como las del seed local o los tests, no recibe perfil. El hook es la puerta; el trigger no la duplica.
+- Cada fila de la lista guarda cómo se registra esa persona: la pareja, solo con Google; la pareja de prueba, con correo. El hook rechaza un alta con contraseña al correo de una persona de Google, para que nadie que conozca ese correo ocupe su sitio. El trigger repite la regla para el tiempo anterior a activar el hook. La API de administración no pasa por el hook, y es como `provision` crea la pareja de prueba.
+- Una pareja son dos personas. El trigger rechaza un tercer alta y un nacimiento en el que alguna de las dos ya no está en la lista, en vez de dejar a la pareja sin mascotas sin avisar.
+- El fichero es la lista entera: `provision` borra las filas de quien ya no está en él. Un perfil ya creado se queda; la lista solo decide las altas nuevas.
 - `just provision` genera la contraseña del usuario de humo, enrola su TOTP y lo verifica. Escribe la contraseña y el secreto en `supabase/.provision/<destino>.smoke.env`, que git ignora, y nunca los imprime. Supabase genera el secreto TOTP y no deja elegirlo. Mientras no exista el proyecto `twochi-dev` de Bitwarden, ese fichero es su único sitio. Decidido contigo el 2026-11-22.
 
 ## Alternativas descartadas
@@ -28,4 +30,4 @@ El hook de altas (Before User Created Hook) rechaza cualquier correo que no sea 
 
 - Hasta que se ejecute `just provision`, el hook rechaza a todo el mundo, también a vosotros dos. El orden es este: migración, `provision`, vuestras altas con Google y TOTP, y después se cierran las altas (TWO-13).
 - Cambiar la pareja o añadir una persona es editar el fichero local y volver a lanzar `provision`, no hacer una migración.
-- Si se pierde el fichero de credenciales del humo, `provision` no rota nada a ciegas: se para y pide borrar el usuario o su factor en Auth para crearlo de nuevo.
+- Si se pierde el fichero de credenciales del humo, `provision` no rota nada a ciegas: se para y pide `just provision --rotate-smoke`. Esa opción da al mismo usuario una contraseña y un TOTP nuevos. Borrarlo no sirve, porque su mascota lo impide y un usuario nuevo no vería otro nacimiento.

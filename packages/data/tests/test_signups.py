@@ -65,10 +65,15 @@ async def run_as_auth(query: str, *args: object) -> list[Row]:
         await connection.close()
 
 
-async def before_user_created(email: str | None) -> object:
+async def before_user_created(email: str | None, provider: str = "google") -> object:
     event = {
         "metadata": {"name": "before-user-created"},
-        "user": {"id": str(uuid4()), "email": email, "aud": "authenticated"},
+        "user": {
+            "id": str(uuid4()),
+            "email": email,
+            "aud": "authenticated",
+            "app_metadata": {"provider": provider, "providers": [provider]},
+        },
     }
     rows = await run_as_auth(
         "select app.before_user_created_hook($1::jsonb)::text as result",
@@ -77,14 +82,15 @@ async def before_user_created(email: str | None) -> object:
     return json.loads(text_at(rows[0], "result"))
 
 
-async def sign_up(email: str) -> UserId:
+async def sign_up(email: str, provider: str = "google") -> UserId:
     """What Supabase Auth does once the hook lets someone in: insert the user."""
     user = UserId(uuid4())
     await run_as_auth(
-        "insert into auth.users (id, email, aud, role) "
-        "values ($1, $2, 'authenticated', 'authenticated')",
+        "insert into auth.users (id, email, aud, role, raw_app_meta_data) "
+        "values ($1, $2, 'authenticated', 'authenticated', $3::jsonb)",
         user,
         email,
+        json.dumps({"provider": provider, "providers": [provider]}),
     )
     return user
 
@@ -121,6 +127,46 @@ async def test_the_hook_rejects_anyone_off_the_list(email: str | None) -> None:
     result = await before_user_created(email)
 
     assert result == {"error": {"http_code": 403, "message": "Signups are closed."}}
+
+
+async def test_the_hook_refuses_a_password_signup_to_a_google_persons_email(
+    couples: Couples,
+) -> None:
+    listed = await allow_couple(couples)
+
+    result = await before_user_created(listed.alice, provider="email")
+
+    assert result == {"error": {"http_code": 403, "message": "Signups are closed."}}
+
+
+async def test_a_signup_another_way_than_listed_gets_no_profile(
+    couples: Couples,
+) -> None:
+    listed = await allow_couple(couples)
+
+    impostor = await sign_up(listed.alice, provider="email")
+
+    profiles = await couples.admin.fetch(
+        "select 1 from app.profiles where user_id = $1", impostor
+    )
+    assert profiles == []
+
+
+async def test_a_third_person_cannot_join_a_couple(couples: Couples) -> None:
+    listed = await allow_couple(couples)
+    await sign_up(listed.alice)
+    await sign_up(listed.bruno)
+    carla = f"carla-{uuid4().hex}@twochi.test"
+    await couples.admin.execute(
+        "insert into app.signup_allowlist "
+        "(email, couple_id, display_name, pet_name, pet_model_key) "
+        "values ($1, $2, 'Carla', 'Car', 'placeholder')",
+        carla,
+        listed.couple_id,
+    )
+
+    with pytest.raises(Exception, match="already has two people"):
+        await sign_up(carla)
 
 
 async def test_the_first_signup_creates_a_profile_and_no_pet(couples: Couples) -> None:
