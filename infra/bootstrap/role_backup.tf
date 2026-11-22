@@ -9,7 +9,7 @@
 # overwrite would destroy a dump within a day: every upload must send If-None-Match: *,
 # which S3 refuses when the key already exists. CreateMultipartUpload and UploadPart
 # carry no such header, so uploads are single PUTs from a file (`aws s3api put-object
-# --if-none-match '*'`, up to 5 GB); a piped `aws s3 cp -` is multipart and denied.
+# --if-none-match '*'`, up to 5 GB); `aws s3 cp` sends no such header and is denied.
 # Customer-provided keys and cold storage classes are refused too: either would leave
 # a dump a person cannot restore at once.
 

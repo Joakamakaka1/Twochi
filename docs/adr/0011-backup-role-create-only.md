@@ -2,7 +2,7 @@
 
 - Estado: aceptada
 - Fecha: 2026-11-22
-- Completa AWS, «Conexiones y permisos», y CI/CD e IaC, «Base de datos»: el documento pide un volcado diario y otro justo antes de `db push`, pero no dice con qué rol se suben
+- Completa AWS, «Conexiones y permisos», y CI/CD e IaC, «Vuelta atrás»: el documento pide un volcado diario y otro justo antes de `db push`, pero no dice con qué rol se suben
 
 ## Contexto
 
@@ -23,7 +23,7 @@ Dos detalles pesan en el diseño:
 
 ## Consecuencias
 
-- Las subidas son un solo `PUT` desde un fichero (`aws s3api put-object --if-none-match '*'`), con un límite de 5 GB que esta base no se acerca a tocar. `CreateMultipartUpload` y `UploadPart` no llevan la cabecera, así que una subida por partes falla con `AccessDenied`, también un `pg_dump` por tubería a `aws s3 cp -`.
+- Las subidas son un solo `PUT` desde un fichero (`aws s3api put-object --if-none-match '*'`), con un límite de 5 GB que esta base no se acerca a tocar. `CreateMultipartUpload` y `UploadPart` no llevan la cabecera, así que cualquier subida por partes falla con `AccessDenied`, igual que cualquier subida sin la cabecera, como la de `aws s3 cp`.
 - Cada volcado necesita una clave nueva, con fecha y hora. Repetir una clave el mismo día falla con `412 Precondition Failed`, que es lo que se quiere.
 - Si IAM no evaluara la clave de condición, la política no permitiría nada: el primer volcado fallaría a la vista, nunca en silencio. El simulador de políticas no lo demuestra, porque solo evalúa las claves que se le pasan. Lo demuestra el primer job de volcado: una subida sin cabecera da 403 y repetir la misma clave da 412.
 - El entorno `backup` se crea antes del `apply`: GitHub crea al vuelo, sin política de rama, el entorno que nombra un job, y en ese hueco cualquier rama podría asumir el rol. Sus secretos (`AWS_BACKUP_ROLE_ARN` y `BACKUPS_BUCKET`) llegan después del `apply`.

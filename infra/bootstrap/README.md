@@ -43,12 +43,12 @@ Los logs de Actions son públicos y un `plan` ejecuta el código del PR, así qu
 `twochi-backup` solo tiene `s3:PutObject` en `twochi-backups-<cuenta>/*`, y solo si la subida manda `If-None-Match: *` (S3 la rechaza si la clave ya existe), sin clave de cifrado propia (SSE-C) y en la clase `STANDARD`. El bucket borra las versiones antiguas al día siguiente, así que sobrescribir un volcado lo destruiría.
 
 - Cada volcado lleva una clave nueva, con fecha y hora; repetir una clave falla con `412 Precondition Failed`.
-- La subida es un solo `PUT` desde un fichero, hasta 5 GB: `aws s3api put-object --if-none-match '*'`. Cualquier subida sin esa cabecera falla con `AccessDenied`, también la subida por partes, que no la manda en sus primeros pasos; un `pg_dump | aws s3 cp -` es por partes.
+- La subida es un solo `PUT` desde un fichero, hasta 5 GB: `aws s3api put-object --if-none-match '*'`. Cualquier subida sin esa cabecera falla con `AccessDenied`, y también cualquier subida por partes, que no la manda en sus primeros pasos; por eso, nada de `aws s3 cp` ni de tuberías.
 - Restaurar es cosa de una persona, con su usuario de administración: el rol no lee ni lista el bucket.
 
 ## Antes de aplicar un rol nuevo
 
-Crea antes su entorno de GitHub, con su política de rama. GitHub crea al vuelo, sin política, el entorno que nombra un job, así que entre el `apply` y la creación a mano cualquier rama del repositorio podría asumir el rol. Para `twochi-backup`, el entorno `backup`: solo la rama `main` y sin revisores, para que el job diario corra solo. Solo lo declaran los jobs de volcado. Compruébalo con `gh api repos/Joakamakaka1/Twochi/environments/backup/deployment-branch-policies`.
+Crea antes su entorno de GitHub, con su política de rama. GitHub crea al vuelo, sin política, el entorno que nombra un job, así que entre el `apply` y la creación a mano cualquier rama del repositorio podría asumir el rol. Para `twochi-backup`, el entorno `backup`: solo la rama `main` y sin revisores, para que el job diario corra solo. Solo lo declaran los jobs de volcado. Compruébalo: `gh api repos/Joakamakaka1/Twochi/environments/backup` debe mostrar `deployment_branch_policy` con `custom_branch_policies: true`, `protected_branches: false` y ninguna regla de revisores, y `gh api repos/Joakamakaka1/Twochi/environments/backup/deployment-branch-policies` una sola política, `main`, de tipo `branch`.
 
 ## Primer apply
 
