@@ -21,6 +21,13 @@ repos:
         language: system
         entry: uv run --locked python .github/scripts/project_ref_guard.py
         stages: [pre-commit, commit-msg]
+      # A slot's supabase/config.toml (another project_id, ports off 553xx) never enters
+      # a commit, even when its skip-worktree mark is lost (TWO-43).
+      - id: supabase-slot-config
+        name: No slot's Supabase config
+        language: system
+        entry: uv run --locked python scripts/slot.py guard
+        files: ^supabase/config\.toml$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: ef6cf06c079dd6b299dfc720b0f14400c9d168e1 # frozen: v0.17.5
     hooks:

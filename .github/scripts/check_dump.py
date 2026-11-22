@@ -35,6 +35,7 @@ from db_dump import DUMP_IMAGE, DumpError, run_dump_script
 
 ROOT = Path(__file__).resolve().parents[2]
 SUPABASE_CONFIG = ROOT / "supabase/config.toml"
+SLOT_SCRIPT = ROOT / "scripts/slot.py"
 # Dev passwords only: the seed's for twochi_backup, the local stack's for postgres.
 BACKUP_PASSWORD = "twochi-backup-local"  # noqa: S105
 POSTGRES_PASSWORD = "postgres"  # noqa: S105
@@ -246,7 +247,23 @@ def _rebuild_with_seed() -> bool:
     return True
 
 
+def has_own_config(checkout: Path) -> bool:
+    """False in a slot (`just slot`) whose supabase/config.toml is not the slot's.
+
+    With the main folder's file back, this check would dump the main folder's database
+    and then reset it. slot.py judges, and says why on stderr; it is another folder's
+    script, so it runs instead of being imported.
+    """
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, str(SLOT_SCRIPT), "check", str(checkout)], check=False
+    )
+    return result.returncode == 0
+
+
 def main() -> int:
+    if not has_own_config(ROOT):
+        _error("This slot's supabase/config.toml is not its own: see above.")
+        return 1
     db = LocalDatabase.from_config(SUPABASE_CONFIG)
     runner_temp = os.environ.get("RUNNER_TEMP") or tempfile.gettempdir()
     work = Path(tempfile.mkdtemp(prefix="check-dump-", dir=runner_temp)).resolve()

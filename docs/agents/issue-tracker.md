@@ -17,6 +17,15 @@ Las specs y los tickets viven en Linear, en el equipo Twochi y en un solo proyec
 - Al terminar, lo cierra con un comentario de lo hecho y de lo que no pudo comprobar.
 - Tras tres intentos fallidos sobre el mismo error, el agente para: escribe en el issue lo que probó y lo que descarta, lo marca bloqueado y toma otro ticket. No rebaja un check para salir.
 
+## Frontera en paralelo
+
+El detalle y su prueba están en el [ADR 0013](../adr/0013-parallel-tickets-one-slot-per-agent.md).
+
+- El orquestador lanza hasta dos tickets a la vez, cada uno a un subagente con su hueco: un worktree en `.claude/worktrees/slot-N` y su propia instancia de Supabase.
+- Dos tickets van juntos si ninguno bloquea al otro, sus rutas previstas no se cruzan y como mucho uno toca un punto caliente: migraciones, lockfiles, `GLOSSARY.md`, contratos compartidos o `supabase/config.toml`.
+- Un ticket fusionado que espera despliegue ya no bloquea a los que dependen de su código: se pueden tomar.
+- Cada agente entrega su rama sin empujarla. El orquestador la revisa, abre el PR y, tras cada fusión, hace que las demás ramas traigan `main` y repitan `just check`.
+
 ## Cerrado es desplegado
 
 - Un issue fusionado pasa a «pendiente de desplegar». Se cierra cuando la prueba de humo pasa en producción.
