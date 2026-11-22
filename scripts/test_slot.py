@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from slot import (
+    EXCLUDED_SERVICES,
     SlotError,
     config_problems,
     main,
@@ -214,6 +215,12 @@ def test_a_missing_slot_is_a_usage_error() -> None:
         main(["down"])
 
     assert stopped.value.code == 2
+
+
+def test_a_slot_starts_the_services_ci_starts() -> None:
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert f"supabase start -x {EXCLUDED_SERVICES}\n" in ci
 
 
 def test_a_clean_and_pushed_worktree_may_be_removed() -> None:
