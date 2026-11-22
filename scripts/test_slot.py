@@ -352,19 +352,55 @@ def test_a_slot_starts_the_services_ci_starts() -> None:
     assert f"supabase start -x {EXCLUDED_SERVICES}\n" in ci
 
 
+def removal(
+    *,
+    status: str = "",
+    unpushed: str = "",
+    config: str | None = None,
+    held: str = MAIN,
+) -> list[str]:
+    """What keeps slot 2's worktree; by default clean, pushed and on its config."""
+    return removal_problems(
+        slot=2,
+        status=status,
+        unpushed=unpushed,
+        config=slot_config(MAIN, 2) if config is None else config,
+        held=held,
+    )
+
+
 def test_a_clean_and_pushed_worktree_may_be_removed() -> None:
-    assert removal_problems(status="", unpushed="") == []
+    assert removal() == []
 
 
 def test_uncommitted_changes_keep_the_worktree() -> None:
-    problems = removal_problems(status=" M justfile\n?? notes.md\n", unpushed="")
+    problems = removal(status=" M justfile\n?? notes.md\n")
 
     assert len(problems) == 1
     assert "2 uncommitted" in problems[0]
 
 
 def test_unpushed_commits_keep_the_worktree() -> None:
-    problems = removal_problems(status="", unpushed="d23ce60 one\n3ac9c90 two\n")
+    problems = removal(unpushed="d23ce60 one\n3ac9c90 two\n")
 
     assert len(problems) == 1
     assert "2 unpushed" in problems[0]
+
+
+def test_an_edit_of_the_slots_config_keeps_the_worktree() -> None:
+    # skip-worktree hides it: `git status` is clean, and the edit would go unseen.
+    edited = slot_config(MAIN, 2).replace("max_rows = 1000", "max_rows = 50")
+
+    problems = removal(config=edited)
+
+    assert len(problems) == 1
+    assert "hidden from `git status`" in problems[0]
+
+
+def test_a_slot_back_on_the_main_folders_config_keeps_the_worktree() -> None:
+    assert len(removal(config=MAIN)) == 1
+
+
+def test_a_config_in_git_that_no_slot_can_run_keeps_the_worktree() -> None:
+    # Nothing to compare the file with: it may hold an edit.
+    assert len(removal(held=slot_config(MAIN, 1))) == 1
