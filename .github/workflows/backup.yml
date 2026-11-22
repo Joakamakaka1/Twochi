@@ -1,0 +1,24 @@
+# Daily dump of the production database to S3 (Datos y vectores, «Backups»; ADR 0011
+# and 0012). A failure turns the run red and GitHub emails whoever last changed the
+# cron line below. GitHub disables scheduled workflows after 60 days without activity
+# in a public repository: re-enable it from the Actions tab if that ever happens.
+name: backup
+
+on:
+  schedule:
+    # 03:17 UTC: night in Spain, and off the top of the hour, when GitHub delays runs.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  daily:
+    permissions:
+      contents: read
+      id-token: write
+    # `$/` is GitHub's newer form, but actionlint 1.7.12 rejects it. A reusable
+    # workflow's `./` already resolves at the running commit, never from the checkout.
+    uses: ./.github/workflows/db-dump.yml # zizmor: ignore[self-repository]
+    with:
+      kind: daily

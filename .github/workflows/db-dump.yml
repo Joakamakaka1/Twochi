@@ -1,0 +1,60 @@
+# Dump the production database to the backups bucket (ADR 0011 and 0012). One job for
+# every dump: the daily one (backup.yml) and, before `db push`, the deploy's (TWO-32).
+name: db-dump
+
+on:
+  workflow_call:
+    inputs:
+      kind:
+        description: "`daily` or `pre-deploy`: the first part of the dump's key."
+        required: true
+        type: string
+
+permissions: {}
+
+env:
+  MISE_VERSION: "2026.9.18"
+  MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+
+jobs:
+  dump:
+    # The environment's branch policy says the same; this skips instead of failing.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # The only subject twochi-backup trusts: `main` only and no reviewers, so the daily
+    # dump runs on its own. Its secrets, the database password included, live here.
+    environment: backup
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - env:
+          ROLE_ARN: ${{ secrets.AWS_BACKUP_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE_ARN" ]; then
+            echo "::error title=database dump::AWS_BACKUP_ROLE_ARN is missing from the backup environment secrets. No dump was made."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@d5574b52816a478f9d4e6529a3f6ff17a8a36785 # v5.2.8
+        with:
+          version: ${{ env.MISE_VERSION }}
+          install_args: python
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_BACKUP_ROLE_ARN }}
+          role-session-name: twochi-backup-${{ github.run_id }}
+          aws-region: eu-west-1
+          mask-aws-account-id: true
+      # Dumps, uploads with a create-only PUT and probes the bucket's guard. The log
+      # keeps the key, time, size and SHA-256 that a restore must match.
+      - env:
+          KIND: ${{ inputs.kind }}
+          BACKUPS_BUCKET: ${{ secrets.BACKUPS_BUCKET }}
+          BACKUP_DB_PASSWORD: ${{ secrets.BACKUP_DB_PASSWORD }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_POOLER_HOST: ${{ vars.SUPABASE_POOLER_HOST }}
+        run: python .github/scripts/db_dump.py "$KIND"
