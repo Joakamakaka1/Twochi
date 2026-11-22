@@ -1,9 +1,9 @@
 import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
-import { createApi, texts } from "../../shared";
+import { ApiError, createApi, texts } from "../../shared";
 import type { CareActionResult, Home, Pet } from "../../shared";
-import { careActionMutation, careOutcomeText, careTap } from "./careActions";
+import { careActionMutation, careFailureText, careOutcomeText, careTap } from "./careActions";
 import { HOME_KEY } from "./home";
 
 const need = (value: number) => ({ value, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -3 });
@@ -117,5 +117,21 @@ describe("care actions", () => {
   it("says nothing when the action was applied or nothing was tapped yet", () => {
     expect(careOutcomeText(applied)).toBeNull();
     expect(careOutcomeText(undefined)).toBeNull();
+  });
+});
+
+describe("careFailureText", () => {
+  it("offers to send the tap again when the API failed", () => {
+    expect(careFailureText(new ApiError(503, "database_unavailable"))).toBe(texts.failure);
+    expect(careFailureText(new TypeError("Failed to fetch"))).toBe(texts.failure);
+  });
+
+  it("offers nothing when the API refused the token: the gate takes the person away", () => {
+    expect(careFailureText(new ApiError(401, "unauthenticated"))).toBeNull();
+    expect(careFailureText(new ApiError(403, "mfa_required"))).toBeNull();
+  });
+
+  it("says nothing when no tap failed", () => {
+    expect(careFailureText(null)).toBeNull();
   });
 });

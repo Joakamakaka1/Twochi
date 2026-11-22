@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/react-query";
+import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import { ApiError } from "../../shared";
@@ -111,6 +111,48 @@ describe("the gate when the API refuses the token before Auth says anything", ()
     auth.arriveInAnotherTab(ALICE);
 
     await apiReadFails(queryClient, new ApiError(500, "internal_error"));
+
+    expect(await gate()).toEqual({ step: "ready", userId: ALICE });
+  });
+});
+
+// A write to the API, such as a care action, that fails as the generated client's callers
+// make it fail.
+async function apiWriteFails(queryClient: QueryClient, error: ApiError) {
+  const write = new MutationObserver(queryClient, { mutationFn: () => Promise.reject(error) });
+  await write.mutate().catch(() => undefined);
+}
+
+describe("the gate when the API refuses the token on a write", () => {
+  it("sends the person to verify the code after a 403 mfa_required", async () => {
+    const auth = new FakeAuth();
+    await enterAtAal2(auth, ALICE);
+    const { queryClient, gate } = await appWith(auth);
+    auth.arriveInAnotherTab(ALICE);
+
+    await apiWriteFails(queryClient, new ApiError(403, "mfa_required"));
+
+    expect(await gate()).toEqual({ step: "verify_totp", factorId: `factor-${ALICE}` });
+  });
+
+  it("sends the person to sign in after a 401 with the session gone", async () => {
+    const auth = new FakeAuth();
+    await enterAtAal2(auth, ALICE);
+    const { queryClient, gate } = await appWith(auth);
+    auth.loseSessionUnnoticed();
+
+    await apiWriteFails(queryClient, new ApiError(401, "unauthenticated"));
+
+    expect(await gate()).toEqual({ step: "sign_in" });
+  });
+
+  it("stays where it is when the write fails for another reason", async () => {
+    const auth = new FakeAuth();
+    await enterAtAal2(auth, ALICE);
+    const { queryClient, gate } = await appWith(auth);
+    auth.arriveInAnotherTab(ALICE);
+
+    await apiWriteFails(queryClient, new ApiError(500, "internal_error"));
 
     expect(await gate()).toEqual({ step: "ready", userId: ALICE });
   });

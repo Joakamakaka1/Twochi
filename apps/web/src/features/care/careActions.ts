@@ -44,3 +44,7 @@ export function careOutcomeText(result: CareActionResult | undefined): string | 
   if (result?.rejection == null) return null;
   return texts.care.rejections[result.rejection];
 }
+
+export function careFailureText(error: unknown): string | null {
+  return error === null ? null : texts.failure;
+}
