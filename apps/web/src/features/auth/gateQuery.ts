@@ -3,13 +3,39 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import type { AuthPort } from "./authPort";
 import { resolveGate } from "./gate";
+import type { Gate } from "./gate";
 
-export const GATE_KEY = ["auth", "gate"] as const;
+const AUTH_SCOPE = "auth";
+export const GATE_KEY = [AUTH_SCOPE, "gate"] as const;
 
-export function gateQuery(auth: AuthPort, _queryClient: QueryClient) {
-  return queryOptions({ queryKey: GATE_KEY, queryFn: () => resolveGate(auth), staleTime: Infinity });
+// The gate lives in the query cache and never goes stale by time: only a change of
+// session resolves it again (followAuth).
+export function gateQuery(auth: AuthPort, queryClient: QueryClient) {
+  return queryOptions({
+    queryKey: GATE_KEY,
+    queryFn: async (): Promise<Gate> => {
+      const before = queryClient.getQueryData<Gate>(GATE_KEY);
+      const gate = await resolveGate(auth);
+      if (!isSamePersonInside(before, gate)) forgetPerson(queryClient);
+      return gate;
+    },
+    staleTime: Infinity,
+  });
 }
 
-export function followAuth(_auth: AuthPort, _queryClient: QueryClient): () => void {
-  return () => undefined;
+// A change of session is a signal, as a Realtime event is: it only invalidates.
+export function followAuth(auth: AuthPort, queryClient: QueryClient): () => void {
+  return auth.onChange(() => {
+    void queryClient.invalidateQueries({ queryKey: GATE_KEY });
+  });
+}
+
+function isSamePersonInside(before: Gate | undefined, gate: Gate): boolean {
+  if (gate.step !== "ready") return false;
+  return before?.step !== "ready" || before.userId === gate.userId;
+}
+
+// Whatever one person loaded must never be shown to the next one on this device.
+function forgetPerson(queryClient: QueryClient): void {
+  queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== AUTH_SCOPE });
 }
