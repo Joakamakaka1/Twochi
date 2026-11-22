@@ -404,3 +404,27 @@ def test_a_slot_back_on_the_main_folders_config_keeps_the_worktree() -> None:
 def test_a_config_in_git_that_no_slot_can_run_keeps_the_worktree() -> None:
     # Nothing to compare the file with: it may hold an edit.
     assert len(removal(held=slot_config(MAIN, 1))) == 1
+
+
+# --- A slot does not remove itself ----------------------------------------------------
+
+
+@pytest.mark.parametrize("command", [["down", "2"], ["down", "2", "--force"]])
+@pytest.mark.usefixtures("no_commands")
+def test_a_slot_is_not_removed_from_its_own_checkout(
+    command: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    # On Windows its own Python is in use: Supabase would go and the folder stay.
+    assert main(command, checkout=SLOT_2) == 1
+    assert "main folder" in capsys.readouterr().err
+
+
+@pytest.mark.usefixtures("no_commands")
+def test_a_slot_is_not_removed_from_a_folder_inside_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inside = tmp_path / ".claude" / "worktrees" / "slot-2" / "packages"
+    inside.mkdir(parents=True)
+    monkeypatch.chdir(inside)
+
+    assert main(["down", "2"], checkout=MAIN_FOLDER) == 1
