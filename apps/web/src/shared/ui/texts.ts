@@ -26,6 +26,14 @@ export const texts = {
   care: {
     caringFor: (petName: string) => `Cuidas a ${petName}`,
     petArrivesWithPartner: "Tu mascota llegará cuando tu pareja se una.",
+    // Why the engine refused a care action (GLOSSARY.md, «Rechazo»).
+    rejections: {
+      not_caretaker: "Esta mascota la cuida tu pareja.",
+      asleep: "Está dormida. Despiértala antes.",
+      already_asleep: "Ya está dormida.",
+      already_awake: "Ya está despierta.",
+      too_tired: "Está demasiado cansada para jugar.",
+    },
   },
 } as const;
 
