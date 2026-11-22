@@ -18,9 +18,13 @@ class ApiSettings(BaseSettings):
     # Project URL, such as https://<ref>.supabase.co. Not a secret.
     supabase_url: str
     jwt_audience: str = "authenticated"
-    # twochi_api through the transaction pooler. Until the deploy provides it, the
-    # routes that read the game answer 503 database_unavailable and the rest still work.
+    # twochi_api through the transaction pooler, for local development. Production
+    # must not set it in the Lambda environment, which CI roles read (ADR 0003, 0005):
+    # it comes from SSM with TWO-32. Without it, the routes that read the game answer
+    # 503 database_unavailable and the rest still work.
     database_url: SecretStr | None = None
+    # Only local Postgres, which serves no TLS, turns this off.
+    database_require_tls: bool = True
 
 
 class SystemClock:
@@ -44,4 +48,5 @@ def build_app() -> FastAPI:
     # The connection opens on first use, so a missing or wrong URL never stops startup.
     url = settings.database_url
     dsn = None if url is None else url.get_secret_value()
-    return create_app(verifier, db=PostgresDatabase(dsn), clock=SystemClock())
+    db = PostgresDatabase(dsn, require_tls=settings.database_require_tls)
+    return create_app(verifier, db=db, clock=SystemClock())

@@ -64,7 +64,11 @@ def app_with(
     lookup: Callable[[str], jwt.PyJWK], *, database_url: str | None = API_URL
 ) -> TestClient:
     verifier = TokenVerifier(issuer=ISSUER, audience=AUDIENCE, signing_key=lookup)
-    app = create_app(verifier, db=PostgresDatabase(database_url), clock=FixedClock(NOW))
+    app = create_app(
+        verifier,
+        db=PostgresDatabase(database_url, require_tls=False),
+        clock=FixedClock(NOW),
+    )
     # Unexpected errors must still answer with a problem, so they are not re-raised.
     return TestClient(app, raise_server_exceptions=False)
 
@@ -229,7 +233,7 @@ def game() -> Iterator[TestClient]:
 
 def home(client: TestClient, auth: str | None) -> Any:
     headers = {} if auth is None else {"X-Twochi-Auth": auth}
-    return client.get("/api/home", headers=headers)
+    return client.get("/api/homes/me", headers=headers)
 
 
 def token_of(couple: TestCouple, user: uuid.UUID, **overrides: Any) -> str:
@@ -301,3 +305,18 @@ def test_home_without_a_configured_database_is_unavailable() -> None:
 
     assert response.status_code == 503
     assert response.json()["code"] == "database_unavailable"
+
+
+@pytest.mark.anyio
+async def test_home_never_shows_another_couples_pet(
+    couples: Couples, game: TestClient
+) -> None:
+    ours = await couples.create()
+    theirs = await couples.create()
+    # Our caretaker's id with the other couple's claim: RLS hides our pet from it.
+    forged_mix = token(sub=str(ours.bruno), couple_id=str(theirs.id))
+
+    response = home(game, forged_mix)
+
+    assert response.status_code == 200
+    assert response.json() == {"pet": None}

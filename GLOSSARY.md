@@ -15,7 +15,7 @@ La persona de la pareja a la que caricaturiza una mascota.
 La persona que cuida una mascota: siempre la pareja de la persona representada.
 _Evitar_: dueño
 
-**Ficha** (`Profile`):
+**Ficha** (`Persona`):
 Lo que el juego sabe de una persona para que su mascota hable como ella: rasgos, gustos y ejemplos de voz.
 _Evitar_: perfil, persona
 
@@ -23,6 +23,9 @@ _Evitar_: perfil, persona
 Un dato atómico de la ficha, con su autor y su perspectiva: lo dice la propia persona o su pareja.
 
 ## Mascota y cuidado
+
+**Casa** (`Home`):
+La pantalla donde vive la mascota que cuidas, con cuatro habitaciones: cocina, baño, dormitorio y salón.
 
 **Mascota** (`Pet`):
 El avatar 3D de una persona de la pareja, con sus necesidades, su nivel y su voz.

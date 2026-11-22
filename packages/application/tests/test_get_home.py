@@ -19,7 +19,7 @@ T0 = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
 
 @pytest.fixture
 async def db() -> AsyncIterator[PostgresDatabase]:
-    database = PostgresDatabase(API_URL)
+    database = PostgresDatabase(API_URL, require_tls=False)
     try:
         yield database
     finally:

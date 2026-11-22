@@ -6,24 +6,31 @@ forgets its filter still cannot cross couples. Nothing here runs outside a trans
 """
 
 import asyncio
+import contextlib
 import json
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from twochi_application.actors import UserActor
 from twochi_application.ports import DatabaseUnavailableError
-from twochi_data.pets import PostgresPets
-from twochi_data.sql import CONNECT_ERRORS, Connection, connect
+from twochi_data.pets import PostgresPetRepository
+from twochi_data.sql import (
+    CONNECT_ERRORS,
+    Connection,
+    Transaction,
+    connect,
+    connection_lost,
+)
 
 
 class PostgresTransaction:
     """The repositories bound to one open connection and transaction."""
 
     def __init__(self, connection: Connection) -> None:
-        self._pets = PostgresPets(connection)
+        self._pets = PostgresPetRepository(connection)
 
     @property
-    def pets(self) -> PostgresPets:
+    def pets(self) -> PostgresPetRepository:
         return self._pets
 
 
@@ -32,10 +39,12 @@ class PostgresDatabase:
 
     Without a `dsn` every transaction fails as unavailable, never trying libpq's
     defaults: the API still starts and answers the routes that need no game data.
+    TLS is required unless `require_tls` is turned off, which only local Postgres needs.
     """
 
-    def __init__(self, dsn: str | None) -> None:
+    def __init__(self, dsn: str | None, *, require_tls: bool = True) -> None:
         self._dsn = dsn
+        self._require_tls = require_tls
         self._connection: Connection | None = None
         # Requests queue for the single connection instead of interleaving on it.
         self._lock = asyncio.Lock()
@@ -45,7 +54,9 @@ class PostgresDatabase:
             raise DatabaseUnavailableError
         if self._connection is None or self._connection.is_closed():
             try:
-                self._connection = await connect(self._dsn)
+                self._connection = await connect(
+                    self._dsn, require_tls=self._require_tls
+                )
             except CONNECT_ERRORS as error:
                 raise DatabaseUnavailableError from error
         return self._connection
@@ -54,20 +65,62 @@ class PostgresDatabase:
     async def transaction(
         self, actor: UserActor
     ) -> AsyncGenerator[PostgresTransaction]:
-        """Open a transaction that applies RLS with the actor's role and claims."""
+        """Open a transaction that applies RLS with the actor's role and claims.
+
+        A connection lost while beginning is replaced once, since nothing ran yet. One
+        lost later is unavailable and never retried: what ran is unknown.
+        """
         async with self._lock:
+            connection, transaction = await self._begin(actor)
+            try:
+                yield PostgresTransaction(connection)
+            except BaseException as error:
+                await _rollback_quietly(transaction)
+                self._raise_if_lost(connection, error)
+                raise
+            try:
+                await transaction.commit()
+            except Exception as error:
+                self._raise_if_lost(connection, error)
+                raise
+
+    async def _begin(self, actor: UserActor) -> tuple[Connection, Transaction]:
+        for attempt in range(2):
             connection = await self._connected()
-            async with connection.transaction():
+            transaction = connection.begin()
+            try:
+                await transaction.start()
                 # Both are `local`: they end with the transaction, as the pooler needs.
                 await connection.execute("set local role authenticated")
                 await connection.execute(
                     "select set_config('request.jwt.claims', $1, true)",
                     json.dumps(dict(actor.claims)),
                 )
-                yield PostgresTransaction(connection)
+            except Exception as error:
+                if not connection_lost(connection, error):
+                    await _rollback_quietly(transaction)
+                    raise
+                self._connection = None
+                if attempt == 1:
+                    raise DatabaseUnavailableError from error
+            else:
+                return connection, transaction
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    def _raise_if_lost(self, connection: Connection, error: BaseException) -> None:
+        if connection_lost(connection, error):
+            # Forget the dead connection: the next transaction opens a new one.
+            self._connection = None
+            raise DatabaseUnavailableError from error
 
     async def close(self) -> None:
         """Close the connection, if one is open."""
         if self._connection is not None:
             await self._connection.close()
             self._connection = None
+
+
+async def _rollback_quietly(transaction: Transaction) -> None:
+    # On a lost connection the rollback fails too; the original error is what matters.
+    with contextlib.suppress(Exception):
+        await transaction.rollback()

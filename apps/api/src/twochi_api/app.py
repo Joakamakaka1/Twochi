@@ -56,7 +56,8 @@ def create_app(verifier: TokenVerifier, *, db: Database, clock: Clock) -> FastAP
     ) -> PingResponse:
         return PingResponse(user_id=who.user_id, nonce=body.nonce)
 
-    @app.get("/api/home")
+    # Casa is one view per caller: `me` keeps the collection noun plural.
+    @app.get("/api/homes/me")
     async def home(  # pyright: ignore[reportUnusedFunction]
         who: Annotated[Principal, Depends(principal)],
     ) -> HomeOut:

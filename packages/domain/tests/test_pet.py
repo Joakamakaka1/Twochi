@@ -4,6 +4,8 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
+from hypothesis import given
+from hypothesis import strategies as st
 
 from twochi_domain.errors import TwochiError
 from twochi_domain.ids import CoupleId, PetId, UserId
@@ -139,3 +141,53 @@ def test_a_pet_without_all_five_needs_is_rejected() -> None:
 
     with pytest.raises(TwochiError):
         replace(complete, needs=missing_fun)
+
+
+need_values = st.fixed_dictionaries(
+    {need: st.floats(min_value=0, max_value=100) for need in Need}
+)
+
+
+@given(values=need_values)
+def test_a_need_below_ten_never_shows_better_than_sad(
+    values: dict[Need, float],
+) -> None:
+    mood = read_pet(pet(values=values), now=T0).mood
+
+    if min(values.values()) < 10:
+        assert mood in {Mood.SAD, Mood.SICK}
+
+
+@given(values=need_values, sick_for=st.timedeltas(timedelta(0), timedelta(days=365)))
+def test_a_pet_marked_sick_is_always_sick(
+    values: dict[Need, float], sick_for: timedelta
+) -> None:
+    reading = read_pet(pet(values=values, sick_since=T0 - sick_for), now=T0)
+
+    assert reading.mood is Mood.SICK
+
+
+MOOD_RANK = {Mood.SICK: 0, Mood.SAD: 1, Mood.NORMAL: 2, Mood.HAPPY: 3}
+
+
+@given(low=need_values, raise_by=need_values)
+def test_more_of_every_need_never_worsens_the_mood(
+    low: dict[Need, float], raise_by: dict[Need, float]
+) -> None:
+    high = {need: min(100.0, low[need] + raise_by[need]) for need in Need}
+
+    worse = read_pet(pet(values=low), now=T0).mood
+    better = read_pet(pet(values=high), now=T0).mood
+
+    assert MOOD_RANK[better] >= MOOD_RANK[worse]
+
+
+@given(values=need_values, passed=st.timedeltas(timedelta(0), timedelta(days=30)))
+def test_reading_never_leaves_the_range_and_is_stamped_now(
+    values: dict[Need, float], passed: timedelta
+) -> None:
+    now = T0 + passed
+    reading = read_pet(pet(values=values), now=now)
+
+    assert all(0 <= r.value <= 100 for r in reading.needs.values())
+    assert all(r.updated_at == now for r in reading.needs.values())

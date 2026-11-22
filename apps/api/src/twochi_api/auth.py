@@ -4,7 +4,7 @@ expiry and the second factor (aal2). The user id always comes from here.
 
 import logging
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from uuid import UUID
 
@@ -33,7 +33,8 @@ class Principal:
     """Who sent the request, and the claims of their verified token for RLS."""
 
     user_id: UUID
-    claims: Mapping[str, object]
+    # Out of the repr: the claims carry the email, and a repr can end up in a log.
+    claims: Mapping[str, object] = field(repr=False)
 
 
 class UnauthenticatedError(TwochiError):

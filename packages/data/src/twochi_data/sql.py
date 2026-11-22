@@ -7,7 +7,7 @@ these protocols instead.
 
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 from uuid import UUID
 
 import asyncpg  # pyright: ignore[reportMissingTypeStubs]
@@ -21,6 +21,16 @@ class Row(Protocol):
     def __getitem__(self, key: str, /) -> object: ...
 
 
+class Transaction(Protocol):
+    """A transaction begun and ended by hand."""
+
+    async def start(self) -> None: ...
+
+    async def commit(self) -> None: ...
+
+    async def rollback(self) -> None: ...
+
+
 class Connection(Protocol):
     """An open connection; queries take `$1` parameters, never formatted strings."""
 
@@ -30,17 +40,60 @@ class Connection(Protocol):
 
     def transaction(self) -> AbstractAsyncContextManager[object]: ...
 
+    def begin(self) -> Transaction: ...
+
     def is_closed(self) -> bool: ...
 
     async def close(self) -> None: ...
 
 
-async def connect(dsn: str) -> Connection:
-    """Open a connection for the transaction pooler: no prepared statements."""
-    return cast(
-        Connection,
-        await asyncpg.connect(dsn, statement_cache_size=0),  # pyright: ignore[reportUnknownMemberType]
+# Well under the Lambda's 30 s, so a hung connect fails as unavailable in time.
+CONNECT_TIMEOUT_SECONDS = 5
+
+
+class _AsyncpgConnection:
+    """asyncpg's connection under the `Connection` protocol.
+
+    asyncpg is the untyped edge, so the raw connection is `Any` here and nowhere else;
+    the `Any` ban covers domain and application, not this adapter's own boundary.
+    """
+
+    def __init__(self, connection: Any) -> None:
+        self._connection = connection
+
+    async def execute(self, query: str, /, *args: object) -> str:
+        return cast(str, await self._connection.execute(query, *args))
+
+    async def fetch(self, query: str, /, *args: object) -> list[Row]:
+        return cast(list[Row], await self._connection.fetch(query, *args))
+
+    def transaction(self) -> AbstractAsyncContextManager[object]:
+        return cast(AbstractAsyncContextManager[object], self._connection.transaction())
+
+    def begin(self) -> Transaction:
+        return cast(Transaction, self._connection.transaction())
+
+    def is_closed(self) -> bool:
+        return cast(bool, self._connection.is_closed())
+
+    async def close(self) -> None:
+        await self._connection.close()
+
+
+async def connect(dsn: str, *, require_tls: bool = False) -> Connection:
+    """Open a connection for the transaction pooler: no prepared statements.
+
+    With `require_tls`, the connection is encrypted or refused, whatever the DSN says;
+    asyncpg's default (`prefer`) would fall back to plain text.
+    """
+    open_connection: Any = asyncpg.connect  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+    connection = await open_connection(
+        dsn,
+        statement_cache_size=0,
+        timeout=CONNECT_TIMEOUT_SECONDS,
+        ssl="require" if require_tls else None,
     )
+    return _AsyncpgConnection(connection)
 
 
 def uuid_at(row: Row, key: str) -> UUID:
@@ -85,4 +138,28 @@ def _typed[T](row: Row, key: str, kind: type[T]) -> T:
 
 
 # Errors that mean the database could not be reached or refused the connection.
-CONNECT_ERRORS: tuple[type[Exception], ...] = (OSError, asyncpg.PostgresError)
+CONNECT_ERRORS: tuple[type[Exception], ...] = (
+    OSError,
+    TimeoutError,
+    asyncpg.PostgresError,
+)
+
+# Errors that mean an open connection was lost: the pooler restarted, the server ended
+# the session or the network dropped. Never a bug in a query.
+_CONNECTION_LOST_ERRORS: tuple[type[Exception], ...] = (
+    OSError,
+    TimeoutError,
+    asyncpg.ConnectionDoesNotExistError,
+    asyncpg.PostgresConnectionError,
+    asyncpg.CannotConnectNowError,
+    asyncpg.AdminShutdownError,
+)
+
+
+def connection_lost(connection: Connection, error: BaseException) -> bool:
+    """Whether `error` means `connection` is gone, rather than a failing query.
+
+    asyncpg reports a lost session as different errors depending on when it notices,
+    so a closed connection counts too, whatever the error.
+    """
+    return connection.is_closed() or isinstance(error, _CONNECTION_LOST_ERRORS)

@@ -25,7 +25,7 @@ where p.caretaker_user_id = $1
 """
 
 
-class PostgresPets:
+class PostgresPetRepository:
     """Pets as the transaction's actor may see them under RLS."""
 
     def __init__(self, connection: Connection) -> None:
