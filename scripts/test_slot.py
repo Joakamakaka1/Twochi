@@ -9,6 +9,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
+from conftest import database_urls
 from slot import (
     EXCLUDED_SERVICES,
     SlotError,
@@ -97,6 +98,36 @@ def test_a_twochi_port_inside_a_url_moves_too() -> None:
     config = MAIN.replace('"http://127.0.0.1"', '"http://127.0.0.1:55321"')
 
     assert 'api_url = "http://127.0.0.1:55521"' in slot_config(config, 2)
+
+
+# --- The database the tests reach -----------------------------------------------------
+
+
+def test_in_a_slot_the_tests_reach_the_slots_database() -> None:
+    urls = database_urls(slot_config(MAIN, 2), env={})
+
+    assert urls.admin == "postgresql://postgres:postgres@127.0.0.1:55522/postgres"
+    assert urls.api == (
+        "postgresql://twochi_api:twochi-api-local@127.0.0.1:55522/postgres"
+    )
+    assert urls.backup == (
+        "postgresql://twochi_backup:twochi-backup-local@127.0.0.1:55522/postgres"
+    )
+
+
+def test_in_the_main_folder_the_tests_reach_twochis_database() -> None:
+    urls = database_urls(MAIN, env={})
+
+    assert urls.admin == "postgresql://postgres:postgres@127.0.0.1:55322/postgres"
+
+
+def test_each_variable_still_overrides_its_url() -> None:
+    elsewhere = "postgresql://twochi_api:other@db.twochi.test:5432/postgres"
+
+    urls = database_urls(MAIN, env={"TWOCHI_TEST_DATABASE_URL": elsewhere})
+
+    assert urls.api == elsewhere
+    assert urls.admin == "postgresql://postgres:postgres@127.0.0.1:55322/postgres"
 
 
 # --- The pre-commit guard -------------------------------------------------------------
