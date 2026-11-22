@@ -35,8 +35,9 @@ check-py:
 
 # Dump the local database as the daily job does (pinned image, as twochi_backup), check
 # what data.sql leaves out, rebuild without the seed, restore as postgres and compare the
-# rows (ADR 0012). Needs `just up`. It ends with `supabase db reset`, which wipes local
-# data outside the seed, so it runs after check-py.
+# rows (ADR 0012). Needs `just up`, with nothing else writing to the database meanwhile.
+# It ends with `supabase db reset`, which wipes local data outside the seed, so it runs
+# after check-py.
 check-dump:
     uv run --locked python .github/scripts/check_dump.py
 
