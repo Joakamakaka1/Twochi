@@ -24,6 +24,28 @@ join app.pet_needs n on n.pet_id = p.id
 where p.caretaker_user_id = $1
 """
 
+# Locks the pet's row and its five needs: a second action on the same pet waits here
+# until the first commits, then reads what the first one wrote.
+_LOCK = """
+select p.id, p.couple_id, p.represents_user_id, p.caretaker_user_id, p.name,
+       p.model_key, p.asleep, p.sick_since, n.need, n.value, n.updated_at
+from app.pets p
+join app.pet_needs n on n.pet_id = p.id
+where p.id = $1
+for update
+"""
+
+# One round trip: the pet's state and its five needs in one statement.
+_SAVE = """
+with pet as (
+  update app.pets set asleep = $2, sick_since = $3 where id = $1
+)
+update app.pet_needs n
+set value = s.value, updated_at = s.updated_at
+from unnest($4::text[], $5::float8[], $6::timestamptz[]) as s (need, value, updated_at)
+where n.pet_id = $1 and n.need = s.need
+"""
+
 
 class PostgresPetRepository:
     """Pets as the transaction's actor may see them under RLS."""
@@ -35,6 +57,24 @@ class PostgresPetRepository:
         """The pet this person cares for, or None if it does not exist or is hidden."""
         rows = await self._connection.fetch(_CARED_BY, user_id)
         return _to_pet(rows) if rows else None
+
+    async def lock(self, pet_id: PetId) -> Pet | None:
+        """A pet and its needs, locked until the transaction ends; None if hidden."""
+        rows = await self._connection.fetch(_LOCK, pet_id)
+        return _to_pet(rows) if rows else None
+
+    async def save(self, pet: Pet) -> None:
+        """Store the pet's sleep state, sickness and needs."""
+        needs = list(pet.needs.items())
+        await self._connection.execute(
+            _SAVE,
+            pet.id,
+            pet.asleep,
+            pet.sick_since,
+            [need.value for need, _ in needs],
+            [state.value for _, state in needs],
+            [state.updated_at for _, state in needs],
+        )
 
 
 def _to_pet(rows: Sequence[Row]) -> Pet:

@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from twochi_api.auth import AuthUnavailableError, MfaRequiredError, UnauthenticatedError
+from twochi_application.care import PetNotFoundError
 from twochi_application.ports import DatabaseUnavailableError
 
 PROBLEM_JSON = "application/problem+json"
@@ -38,6 +39,11 @@ async def _database_unavailable(_request: Request, _error: Exception) -> JSONRes
     return problem(503, "database_unavailable", "Game data temporarily unavailable")
 
 
+async def _pet_not_found(_request: Request, _error: Exception) -> JSONResponse:
+    # The same answer for an unknown pet and another couple's: nothing leaks.
+    return problem(404, "not_found", "Request failed")
+
+
 async def _invalid_request(_request: Request, _error: Exception) -> JSONResponse:
     return problem(422, "invalid_request", "Invalid request")
 
@@ -58,6 +64,7 @@ def install(app: FastAPI) -> None:
     app.add_exception_handler(MfaRequiredError, _mfa_required)
     app.add_exception_handler(AuthUnavailableError, _auth_unavailable)
     app.add_exception_handler(DatabaseUnavailableError, _database_unavailable)
+    app.add_exception_handler(PetNotFoundError, _pet_not_found)
     app.add_exception_handler(RequestValidationError, _invalid_request)
     app.add_exception_handler(HTTPException, _http_error)
     # Anything else: a problem without details; Starlette still logs the traceback.

@@ -18,6 +18,7 @@ from twochi_api.app import create_app
 from twochi_api.auth import TokenVerifier
 from twochi_application.testing import FixedClock
 from twochi_data.database import PostgresDatabase
+from twochi_domain.needs import Need
 
 ISSUER = "https://example-project.supabase.co/auth/v1"
 AUDIENCE = "authenticated"
@@ -348,3 +349,107 @@ def test_the_plural_rule_catches_a_singular_collection() -> None:
     collections = collections_of(["/api/homes/me", "/api/home"])
 
     assert {c for c in collections if not c.endswith("s")} == {"home"}
+
+
+# Care actions.
+
+
+def care(client: TestClient, auth: str | None, pet_id: object, body: object) -> Any:
+    headers = {} if auth is None else {"X-Twochi-Auth": auth}
+    return client.post(f"/api/pets/{pet_id}/care-actions", json=body, headers=headers)
+
+
+def feed(key: str = "tap-1") -> dict[str, str]:
+    return {"action": "feed", "idempotency_key": key}
+
+
+@pytest.mark.anyio
+async def test_care_action_applies_and_returns_the_pet(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create(needs_of_alices_pet={Need.HUNGER: 50}, updated_at=NOW)
+
+    response = care(
+        game, token_of(couple, couple.bruno), couple.pet_of_alice.id, feed()
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["applied"] is True
+    assert body["rejection"] is None
+    assert body["deltas"] == {"hunger": 30.0}
+    assert body["pet"]["id"] == str(couple.pet_of_alice.id)
+    assert body["pet"]["needs"]["hunger"] == {
+        "value": 80.0,
+        "updated_at": "2026-11-22T12:00:00Z",
+        "rate_per_hour": -6.0,
+    }
+    assert set(body["pet"]) == {"id", "name", "model_key", "asleep", "mood", "needs"}
+
+
+@pytest.mark.anyio
+async def test_a_refused_care_action_is_a_200_with_its_reason(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create(updated_at=NOW)
+
+    # Alice is the person this pet represents: she does not care for it.
+    response = care(
+        game, token_of(couple, couple.alice), couple.pet_of_alice.id, feed()
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["applied"] is False
+    assert body["rejection"] == "not_caretaker"
+    assert body["deltas"] == {}
+    assert body["pet"]["needs"]["hunger"]["value"] == 80.0
+
+
+@pytest.mark.anyio
+async def test_another_couples_pet_is_a_404_problem(
+    couples: Couples, game: TestClient
+) -> None:
+    ours = await couples.create(updated_at=NOW)
+    theirs = await couples.create(updated_at=NOW)
+
+    response = care(game, token_of(ours, ours.bruno), theirs.pet_of_alice.id, feed())
+
+    assert response.status_code == 404
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "not_found"
+
+
+@pytest.mark.parametrize(
+    ("pet_id", "body"),
+    [
+        (USER_ID, {"action": "dance", "idempotency_key": "k"}),
+        (USER_ID, {"action": "feed"}),
+        (USER_ID, {"action": "feed", "idempotency_key": ""}),
+        (USER_ID, {"action": "feed", "idempotency_key": "k" * 65}),
+        ("not-a-uuid", {"action": "feed", "idempotency_key": "k"}),
+    ],
+    ids=["unknown-action", "no-key", "empty-key", "long-key", "bad-pet-id"],
+)
+def test_an_invalid_care_action_is_a_422_problem(
+    game: TestClient, pet_id: object, body: object
+) -> None:
+    response = care(game, token(), pet_id, body)
+
+    assert response.status_code == 422
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "invalid_request"
+
+
+def test_a_care_action_needs_a_token(game: TestClient) -> None:
+    response = care(game, None, USER_ID, feed())
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "unauthenticated"
+
+
+def test_a_care_action_needs_the_second_factor(game: TestClient) -> None:
+    response = care(game, token(aal="aal1"), USER_ID, feed())
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "mfa_required"
