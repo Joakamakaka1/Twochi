@@ -108,6 +108,9 @@ def test_a_content_type_with_parameters_still_matches() -> None:
         ("/api/health", INDEX_HTML),
         ("/api/health", Response(200, "application/json", b"not json")),
         ("/api/health", Response(503, "application/problem+json", PROBLEM.body)),
+        # A JSON body that does not say the API is fine.
+        ("/api/health", Response(200, "application/json", b'{"status":"down"}')),
+        ("/api/health", Response(200, "application/json", b"null")),
         # CloudFront's own 403 (the WAF's block) is HTML, not S3's XML.
         ("/", Response(403, "text/html", b"<html>Request blocked</html>")),
         (
@@ -124,6 +127,8 @@ def test_a_content_type_with_parameters_still_matches() -> None:
         "health-html",
         "health-not-json",
         "health-503",
+        "health-down",
+        "health-null",
         "front-waf-block",
         "front-404",
         "front-json",
