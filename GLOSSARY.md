@@ -22,6 +22,16 @@ _Evitar_: perfil, persona
 **Rasgo** (`PersonaTrait`):
 Un dato atómico de la ficha, con su autor y su perspectiva: lo dice la propia persona o su pareja.
 
+**Lista de altas** (`signup_allowlist`):
+Los correos que pueden registrarse, cada uno con su pareja, su nombre visible y la mascota que lo representará. La rellena `just provision` desde un fichero local; fuera de ella nadie se registra.
+_Evitar_: lista blanca, invitación
+
+**Pareja de prueba** (`test_couple`):
+La pareja ficticia del usuario de humo y de un segundo usuario que nunca entra. Existe para que el humo tenga una mascota que cuidar sin tocar el juego de la pareja real.
+
+**Usuario de humo** (`smoke`):
+La única cuenta con contraseña: entra con contraseña y TOTP para la prueba de humo en producción.
+
 ## Mascota y cuidado
 
 **Casa** (`Home`):
@@ -63,6 +73,9 @@ Cuánto le gusta a una mascota un objeto del catálogo, de −2 a 2, según los 
 
 **Evento** (`PetEvent`):
 El registro inmutable de algo que ocurrió a una mascota, del que salen el diario, las rachas y el álbum.
+
+**Nacimiento** (`birth`):
+El momento en que nacen las dos mascotas de una pareja: cuando se registra su segunda persona. Nacen despiertas, con las cinco necesidades a 80, y es el primer evento de cada una.
 
 ## Conversación y memoria
 

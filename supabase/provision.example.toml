@@ -1,0 +1,41 @@
+# Who may sign up, for `just provision` (ADR 0007). Copy this file to
+# supabase/provision.toml, which git ignores, and put the real people there. Fictional
+# data only in this example: no real email or name ever enters the repository.
+#
+# The file is the whole list. Running `just provision` again after editing it updates
+# the allowlist: nothing is duplicated, and whoever left the file leaves the list.
+
+# One table per couple, with exactly two people, who sign up with Google. Each person's
+# pet is the one that will represent them; the other person cares for it.
+[[couples]]
+timezone = "Europe/Madrid"
+
+[[couples.people]]
+email = "persona-a@twochi.test"
+display_name = "Ana"
+pet_name = "Anita"
+pet_model_key = "placeholder"
+
+[[couples.people]]
+email = "persona-b@twochi.test"
+display_name = "Beto"
+pet_name = "Betito"
+pet_model_key = "placeholder"
+
+# The test couple: the smoke user, who signs in with a password and TOTP, and a partner
+# who never signs in. `provision` creates both through the Auth admin API and writes the
+# smoke user's password and TOTP secret to supabase/.provision/<target>.smoke.env.
+[test_couple]
+timezone = "Europe/Madrid"
+
+[test_couple.smoke]
+email = "humo@twochi.test"
+display_name = "Humo"
+pet_name = "Humito"
+pet_model_key = "placeholder"
+
+[test_couple.partner]
+email = "humo-pareja@twochi.test"
+display_name = "Pareja de humo"
+pet_name = "Parejita"
+pet_model_key = "placeholder"
