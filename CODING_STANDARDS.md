@@ -8,7 +8,7 @@ Destilado de [Arquitectura y convenciones](docs/arquitectura/arquitectura-y-conv
 - Puertos con nombre de papel (`PetVoice`); adaptadores con tecnología y papel (`PydanticAiPetVoice`, `SqsJobQueue`). [→](docs/arquitectura/arquitectura-y-convenciones.md#puertos)
 - Sin `utils.py` ni `helpers.py`: cada módulo se llama como su tema. [→](docs/arquitectura/arquitectura-y-convenciones.md#convenciones-de-python)
 - Los términos del juego salen de [GLOSSARY.md](GLOSSARY.md); un término nuevo entra allí antes que en el código. [→](docs/arquitectura/arquitectura-y-convenciones.md#qué-cambia-en-las-demás-pestañas)
-- Tablas en plural, en inglés y en `snake_case`; rutas bajo `/api` con sustantivos en plural. [→](docs/arquitectura/arquitectura-y-convenciones.md#convenciones-de-api-y-base-de-datos)
+- Tablas en plural, en inglés y en `snake_case` (las rutas en plural ya las comprueba un test de `apps/api`). [→](docs/arquitectura/arquitectura-y-convenciones.md#convenciones-de-api-y-base-de-datos)
 - Front: componentes con exportación con nombre y fichero en `PascalCase`; hooks `useX`. [→](docs/arquitectura/arquitectura-y-convenciones.md#convenciones-del-front)
 
 ## Cuándo se crea un puerto
