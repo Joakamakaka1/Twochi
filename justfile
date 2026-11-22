@@ -18,7 +18,7 @@ setup:
     uvx pre-commit@4.7.0 install
 
 # Everything CI checks, in order. CI runs these same recipes, one job each.
-check: check-db check-py check-web check-workflows check-infra
+check: check-db check-py check-dump check-web check-workflows check-infra
 
 # Database: lint the local schema. Needs local Supabase (`just up`), as the tests do.
 check-db:
@@ -32,6 +32,13 @@ check-py:
     uv run --locked pyright
     uv run --locked lint-imports
     uv run --locked pytest --cov
+
+# Dump the local database as the daily job does (pinned image, as twochi_backup), check
+# what data.sql leaves out, rebuild without the seed, restore as postgres and compare the
+# rows (ADR 0012). Needs `just up`. It ends with `supabase db reset`, which wipes local
+# data outside the seed, so it runs after check-py.
+check-dump:
+    uv run --locked python .github/scripts/check_dump.py
 
 # Front: lint, types and tests in every pnpm workspace.
 check-web:
