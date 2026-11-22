@@ -37,3 +37,19 @@ describe("submitTotpCode", () => {
     expect(await resolveGate(auth)).toEqual({ step: "verify_totp", factorId });
   });
 });
+
+describe("submitTotpCode with what people type", () => {
+  it("accepts the code with the space authenticator apps show in the middle", async () => {
+    const { auth, factorId } = atTheCodeScreen();
+
+    expect(await submitTotpCode(auth, factorId, " 123 456 ")).toBe("verified");
+    expect(auth.codesReceived).toEqual(["123456"]);
+  });
+
+  it.each(["", "12345", "1234567", "12345a", "١٢٣٤٥٦"])("never sends Auth %j, which is not six digits", async (input) => {
+    const { auth, factorId } = atTheCodeScreen();
+
+    expect(await submitTotpCode(auth, factorId, input)).toBe("malformed");
+    expect(auth.codesReceived).toEqual([]);
+  });
+});
