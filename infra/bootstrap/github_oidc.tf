@@ -44,16 +44,16 @@ data "aws_iam_policy_document" "github_trust" {
   }
 }
 
-# Shared by both CI roles: nothing outside the three regions (GuardDuty runs in all of
-# them), and nothing that reads secrets or real data. A plan runs provider code with
-# whatever the PR brings, and the repository's logs are public, so anything these roles
-# can read may end up published.
+# Shared by both CI roles: nothing outside the three regions, and nothing that reads
+# secrets or real data. A plan runs provider code with whatever the PR brings, and the
+# repository's logs are public, so anything these roles can read may end up published.
+# GuardDuty, which runs in every region, belongs to bootstrap (ADR 0006).
 data "aws_iam_policy_document" "ci_guardrails" {
   statement {
-    sid         = "DenyOtherRegions"
-    effect      = "Deny"
-    not_actions = ["guardduty:*"]
-    resources   = ["*"]
+    sid       = "DenyOtherRegions"
+    effect    = "Deny"
+    actions   = ["*"]
+    resources = ["*"]
 
     condition {
       test     = "StringNotEquals"
@@ -123,6 +123,42 @@ data "aws_iam_policy_document" "ci_guardrails" {
       "arn:aws:s3:::${local.state_bucket}/*",
       "arn:aws:s3:::${local.artifacts_bucket}/*",
     ]
+  }
+
+  # Bootstrap's state holds the alerts email in plain text, and the stack never reads it.
+  statement {
+    sid    = "DenyBootstrapState"
+    effect = "Deny"
+    actions = [
+      "s3:GetObject",
+      "s3:GetObjectVersion",
+      "s3:GetObjectAttributes",
+      "s3:GetObjectTorrent",
+    ]
+    resources = ["arn:aws:s3:::${local.state_bucket}/bootstrap/*"]
+  }
+
+  # Who receives the security alerts, and the subscription ARN that would let anyone
+  # unsubscribe an unauthenticated subscription, stay out of public logs.
+  statement {
+    sid    = "DenyAlertSubscribers"
+    effect = "Deny"
+    actions = [
+      "sns:ListSubscriptionsByTopic",
+      "sns:GetSubscriptionAttributes",
+    ]
+    resources = [
+      local.security_alerts_topic_arn,
+      "${local.security_alerts_topic_arn}:*",
+    ]
+  }
+
+  # ListSubscriptions has no resource to scope; the stack's Terraform never calls it.
+  statement {
+    sid       = "DenyListingSubscriptions"
+    effect    = "Deny"
+    actions   = ["sns:ListSubscriptions"]
+    resources = ["*"]
   }
 
   # Log lines and queue messages may carry payloads; Terraform never reads them.
