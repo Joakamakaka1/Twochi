@@ -17,6 +17,7 @@ def test_the_committed_openapi_matches_the_api() -> None:
 
 
 def test_the_document_describes_the_home_route() -> None:
-    document = openapi_document()
+    paths = openapi_document()["paths"]
 
-    assert "/api/homes/me" in document["paths"]
+    assert isinstance(paths, dict)
+    assert "/api/homes/me" in paths

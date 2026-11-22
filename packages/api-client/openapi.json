@@ -1,0 +1,516 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Twochi API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pings": {
+      "post": {
+        "summary": "Ping",
+        "operationId": "ping_api_pings_post",
+        "parameters": [
+          {
+            "name": "X-Twochi-Auth",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Twochi-Auth"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/homes/me": {
+      "get": {
+        "summary": "Home",
+        "operationId": "home_api_homes_me_get",
+        "parameters": [
+          {
+            "name": "X-Twochi-Auth",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Twochi-Auth"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pets/{pet_id}/care-actions": {
+      "post": {
+        "summary": "Care Action",
+        "operationId": "care_action_api_pets__pet_id__care_actions_post",
+        "parameters": [
+          {
+            "name": "pet_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Pet Id"
+            }
+          },
+          {
+            "name": "X-Twochi-Auth",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Twochi-Auth"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CareActionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareActionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CareAction": {
+        "type": "string",
+        "enum": [
+          "feed",
+          "play",
+          "pet",
+          "bathe",
+          "sleep",
+          "wake"
+        ],
+        "title": "CareAction",
+        "description": "What the caretaker can do to their pet from the interface."
+      },
+      "CareActionIn": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/CareAction"
+          },
+          "idempotency_key": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{1,64}$",
+            "title": "Idempotency Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "idempotency_key"
+        ],
+        "title": "CareActionIn",
+        "description": "One tap: the front reuses its key when it retries that same tap."
+      },
+      "CareActionOut": {
+        "properties": {
+          "applied": {
+            "type": "boolean",
+            "title": "Applied"
+          },
+          "rejection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Rejection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "deltas": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/Need"
+            },
+            "type": "object",
+            "title": "Deltas"
+          },
+          "pet": {
+            "$ref": "#/components/schemas/PetOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "applied",
+          "rejection",
+          "deltas",
+          "pet"
+        ],
+        "title": "CareActionOut",
+        "description": "Applied with its deltas, or refused with its reason; the pet as it is now."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "Health"
+      },
+      "HomeOut": {
+        "properties": {
+          "pet": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PetOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "pet"
+        ],
+        "title": "HomeOut",
+        "description": "The pet the caller cares for, or null until both people have arrived."
+      },
+      "Mood": {
+        "type": "string",
+        "enum": [
+          "happy",
+          "normal",
+          "sad",
+          "sick"
+        ],
+        "title": "Mood",
+        "description": "What the pet shows, from the average of its needs."
+      },
+      "Need": {
+        "type": "string",
+        "enum": [
+          "hunger",
+          "energy",
+          "hygiene",
+          "fun",
+          "affection"
+        ],
+        "title": "Need",
+        "description": "One of the five needs a pet has."
+      },
+      "NeedOut": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "rate_per_hour": {
+            "type": "number",
+            "title": "Rate Per Hour"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "updated_at",
+          "rate_per_hour"
+        ],
+        "title": "NeedOut",
+        "description": "A need at `updated_at` and its hourly change; the front interpolates."
+      },
+      "NeedsOut": {
+        "properties": {
+          "hunger": {
+            "$ref": "#/components/schemas/NeedOut"
+          },
+          "energy": {
+            "$ref": "#/components/schemas/NeedOut"
+          },
+          "hygiene": {
+            "$ref": "#/components/schemas/NeedOut"
+          },
+          "fun": {
+            "$ref": "#/components/schemas/NeedOut"
+          },
+          "affection": {
+            "$ref": "#/components/schemas/NeedOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hunger",
+          "energy",
+          "hygiene",
+          "fun",
+          "affection"
+        ],
+        "title": "NeedsOut"
+      },
+      "PetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "model_key": {
+            "type": "string",
+            "title": "Model Key"
+          },
+          "asleep": {
+            "type": "boolean",
+            "title": "Asleep"
+          },
+          "mood": {
+            "$ref": "#/components/schemas/Mood"
+          },
+          "needs": {
+            "$ref": "#/components/schemas/NeedsOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "model_key",
+          "asleep",
+          "mood",
+          "needs"
+        ],
+        "title": "PetOut"
+      },
+      "PingRequest": {
+        "properties": {
+          "nonce": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Nonce"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nonce"
+        ],
+        "title": "PingRequest"
+      },
+      "PingResponse": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "nonce": {
+            "type": "string",
+            "title": "Nonce"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "nonce"
+        ],
+        "title": "PingResponse"
+      },
+      "Rejection": {
+        "type": "string",
+        "enum": [
+          "not_caretaker",
+          "asleep",
+          "already_asleep",
+          "already_awake",
+          "too_tired"
+        ],
+        "title": "Rejection",
+        "description": "Why the engine refused a care action; the front animates it."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
