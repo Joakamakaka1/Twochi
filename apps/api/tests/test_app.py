@@ -3,7 +3,7 @@ the responses, with local Supabase behind the routes that read the game."""
 
 import json
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -320,3 +320,31 @@ async def test_home_never_shows_another_couples_pet(
 
     assert response.status_code == 200
     assert response.json() == {"pet": None}
+
+
+def collections_of(paths: Iterable[str]) -> set[str]:
+    """The first segment after /api of each path: the collection it names."""
+    return {path.split("/")[2] for path in paths if path.startswith("/api/")}
+
+
+def test_every_api_collection_is_a_plural_noun() -> None:
+    # CODING_STANDARDS, «Nombres»: routes under /api use plural nouns. A caller's own
+    # view is `/api/<collection>/me`; health predates the rule.
+    singular_allowed = {"health"}
+    verifier = TokenVerifier(
+        issuer=ISSUER, audience=AUDIENCE, signing_key=lambda _token: public_jwk()
+    )
+    app = create_app(verifier, db=PostgresDatabase(None), clock=FixedClock(NOW))
+    paths: dict[str, object] = app.openapi()["paths"]
+
+    collections = collections_of(paths)
+    singular = {c for c in collections if not c.endswith("s")} - singular_allowed
+
+    assert "homes" in collections
+    assert singular == set()
+
+
+def test_the_plural_rule_catches_a_singular_collection() -> None:
+    collections = collections_of(["/api/homes/me", "/api/home"])
+
+    assert {c for c in collections if not c.endswith("s")} == {"home"}
