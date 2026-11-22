@@ -1,6 +1,6 @@
 # 0013. Tickets en paralelo: un hueco por agente, con su worktree y su base local
 
-- Estado: propuesta (la acepta la fusión de su PR)
+- Estado: aceptada. El [ADR 0014](0014-game-first-care-is-v1-and-the-ai-merges.md) decide lo que aquí quedó propuesto sobre el tope de cinco PR, sube la concurrencia a tres y cambia quién fusiona
 - Fecha: 2026-11-22
 - Cierra el «a validar» de Forma de trabajo, «Subagentes en paralelo sobre la misma base local y el mismo emulador», y cambia «Quién arranca cada ticket»: el orquestador deja de llevar un solo ticket a la vez
 
