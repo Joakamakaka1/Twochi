@@ -97,6 +97,9 @@ jobs:
           supabase start -x realtime,storage-api,imgproxy,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
       - run: just check-db
       - run: just check-py
+      # Last: it rebuilds the database. Catches a CLI or image update that breaks the
+      # restore of the daily dump (TWO-41, ADR 0012).
+      - run: just check-dump
 
   web:
     needs: changes
