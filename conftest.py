@@ -5,6 +5,7 @@ convenciones, «Tests»). Each test creates its own couple and never cleans tabl
 couple that isolates people also isolates tests and lets them run in parallel.
 """
 
+import asyncio
 import json
 import os
 from collections.abc import AsyncIterator, Mapping
@@ -30,8 +31,10 @@ API_URL = os.environ.get(
 
 
 @pytest.fixture
-def anyio_backend() -> str:
-    return "asyncio"
+def anyio_backend() -> tuple[str, dict[str, object]]:
+    # The selector loop, as on the Lambda (Linux). Windows defaults to the proactor
+    # loop, whose transport raises from a callback when the server resets a socket.
+    return "asyncio", {"loop_factory": asyncio.SelectorEventLoop}
 
 
 @dataclass(frozen=True, slots=True)

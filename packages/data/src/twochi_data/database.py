@@ -74,14 +74,18 @@ class PostgresDatabase:
             connection, transaction = await self._begin(actor)
             try:
                 yield PostgresTransaction(connection)
-            except BaseException as error:
+            except Exception as error:
                 await _rollback_quietly(transaction)
-                self._raise_if_lost(connection, error)
+                await self._raise_if_lost(connection, error)
+                raise
+            except BaseException:
+                # Cancellation and exits pass through untouched, after the rollback.
+                await _rollback_quietly(transaction)
                 raise
             try:
                 await transaction.commit()
             except Exception as error:
-                self._raise_if_lost(connection, error)
+                await self._raise_if_lost(connection, error)
                 raise
 
     async def _begin(self, actor: UserActor) -> tuple[Connection, Transaction]:
@@ -100,18 +104,26 @@ class PostgresDatabase:
                 if not connection_lost(connection, error):
                     await _rollback_quietly(transaction)
                     raise
-                self._connection = None
+                await self._forget(connection, error)
                 if attempt == 1:
                     raise DatabaseUnavailableError from error
             else:
                 return connection, transaction
         raise AssertionError("unreachable")  # pragma: no cover
 
-    def _raise_if_lost(self, connection: Connection, error: BaseException) -> None:
+    async def _raise_if_lost(self, connection: Connection, error: Exception) -> None:
         if connection_lost(connection, error):
-            # Forget the dead connection: the next transaction opens a new one.
-            self._connection = None
+            await self._forget(connection, error)
             raise DatabaseUnavailableError from error
+
+    async def _forget(self, connection: Connection, error: Exception) -> None:
+        # The next transaction opens a new connection. A timed-out one is still open,
+        # so it is closed; a dead one is left to asyncpg, since closing a socket the
+        # server already reset only raises again.
+        self._connection = None
+        if isinstance(error, TimeoutError):
+            with contextlib.suppress(Exception):
+                await connection.close()
 
     async def close(self) -> None:
         """Close the connection, if one is open."""

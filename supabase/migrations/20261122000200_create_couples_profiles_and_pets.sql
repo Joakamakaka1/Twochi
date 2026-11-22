@@ -32,8 +32,10 @@ create table app.pets (
   sick_since        timestamptz,
   created_at        timestamptz not null default now(),
   unique (couple_id, id),
-  -- One pet per represented person, cared for by the other person of the same couple.
+  -- One pet per represented person, cared for by the other person of the same couple:
+  -- each person represents one pet and cares for one pet.
   unique (represents_user_id),
+  unique (caretaker_user_id),
   check (represents_user_id <> caretaker_user_id),
   foreign key (couple_id, represents_user_id) references app.profiles (couple_id, user_id),
   foreign key (couple_id, caretaker_user_id) references app.profiles (couple_id, user_id)
@@ -63,8 +65,11 @@ create table app.pet_events (
   payload         jsonb not null default '{}',
   deltas          jsonb not null default '{}',
   rules_version   text not null,
-  idempotency_key text not null unique,
+  idempotency_key text not null,
   created_at      timestamptz not null default now(),
+  -- Per pet, not global: under RLS a couple cannot see another couple's keys, so a
+  -- global key could collide unseen and would tell one couple about another's.
+  unique (pet_id, idempotency_key),
   foreign key (couple_id, pet_id) references app.pets (couple_id, id)
 );
 

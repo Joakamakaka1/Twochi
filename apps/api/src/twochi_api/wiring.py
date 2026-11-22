@@ -46,7 +46,9 @@ def build_app() -> FastAPI:
         signing_key=jwks.get_signing_key_from_jwt,
     )
     # The connection opens on first use, so a missing or wrong URL never stops startup.
+    # A blank value counts as unset: an empty DSN would make asyncpg try libpq's
+    # defaults (localhost:5432) instead of answering unavailable.
     url = settings.database_url
-    dsn = None if url is None else url.get_secret_value()
+    dsn = (url.get_secret_value() or None) if url is not None else None
     db = PostgresDatabase(dsn, require_tls=settings.database_require_tls)
     return create_app(verifier, db=db, clock=SystemClock())

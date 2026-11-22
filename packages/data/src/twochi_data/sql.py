@@ -47,8 +47,10 @@ class Connection(Protocol):
     async def close(self) -> None: ...
 
 
-# Well under the Lambda's 30 s, so a hung connect fails as unavailable in time.
+# Well under the Lambda's 30 s, so a hung connect or query fails as unavailable in
+# time instead of holding the container's only connection until the Lambda dies.
 CONNECT_TIMEOUT_SECONDS = 5
+COMMAND_TIMEOUT_SECONDS = 10
 
 
 class _AsyncpgConnection:
@@ -91,6 +93,7 @@ async def connect(dsn: str, *, require_tls: bool = False) -> Connection:
         dsn,
         statement_cache_size=0,
         timeout=CONNECT_TIMEOUT_SECONDS,
+        command_timeout=COMMAND_TIMEOUT_SECONDS,
         ssl="require" if require_tls else None,
     )
     return _AsyncpgConnection(connection)
