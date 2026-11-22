@@ -41,8 +41,10 @@ check-py:
 check-dump:
     uv run --locked python .github/scripts/check_dump.py
 
-# Front: lint, types and tests in every pnpm workspace.
+# Front: the client generated from the committed OpenAPI is current (so a change in the
+# contract reaches tsc), then lint, types and tests in every pnpm workspace.
 check-web:
+    pnpm --filter @twochi/api-client run check-generated
     pnpm -r --if-present run lint
     pnpm -r --if-present run typecheck
     pnpm -r --if-present run test
@@ -62,6 +64,12 @@ check-infra:
     for dir in infra/bootstrap infra/stack; do [ -f "$dir/versions.tf" ] || continue; terraform -chdir="$dir" init -backend=false -input=false -lockfile=readonly > /dev/null; terraform -chdir="$dir" validate; done
     if [ -d infra ]; then cd infra && tflint --init && tflint --recursive; fi
     node --test "infra/**/*.test.mjs"
+
+# Regenerate the OpenAPI document from the API, and the front's types from it. A test in
+# check-py fails while the document is stale; check-web fails while the types are.
+openapi:
+    uv run --locked python scripts/export_openapi.py
+    pnpm --filter @twochi/api-client run generate
 
 # Build a Lambda zip for arm64 into dist/, named by the hash of its inputs, as CI does.
 package app="api":
