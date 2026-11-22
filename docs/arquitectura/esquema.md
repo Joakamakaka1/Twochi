@@ -83,7 +83,7 @@ Una tabla fuera de los mapas: no es del juego, sino de quién entra en él ([ADR
 
 ## Acceso: roles, RLS y Realtime
 
-RLS solo es una red de seguridad real si la API no entra con un rol que se la salta. Hay seis caminos a la base de datos y cada uno merece su rol.
+RLS solo es una red de seguridad real si la API no entra con un rol que se la salta. Hay siete caminos a la base de datos y cada uno merece su rol.
 
 | Quién | Cómo entra | Rol de Postgres | Qué puede |
 | --- | --- | --- | --- |
@@ -91,6 +91,7 @@ RLS solo es una red de seguridad real si la API no entra con un rol que se la sa
 | API (Lambda) | Postgres por el pooler, modo transacción | `twochi_api`, propio | Leer y escribir en `app`, con RLS aplicada |
 | Worker (Lambda) | Igual | `twochi_worker`, propio | Barridos entre parejas, memorias, resumen de sesión y diario, con políticas propias en las tablas que usa y sin `BYPASSRLS` |
 | Migraciones (CI) | Conexión de sesión | `postgres` | Cambios de esquema |
+| Volcado diario (CI) | Postgres por el pooler, modo sesión | `twochi_backup`, propio | Leer todo, sin RLS (`BYPASSRLS` y `pg_read_all_data`); no escribe en ninguna tabla ([ADR 0012](../adr/0012-dump-with-read-only-role.md)) |
 | Tú, como admin | Supabase Studio | `postgres` | Todo |
 | MCP de administración, en local | Postgres por el pooler, modo transacción | twochi_admin, propio | Solo lectura sobre app, con contenido |
 
@@ -151,7 +152,7 @@ create index on app.pet_events (couple_id, created_at desc);
 - TLS en `verify-full` contra la CA raíz de Supabase, que va dentro de `twochi_data` ([ADR 0010](../adr/0010-postgres-tls-verify-full.md)).
 - Una sola conexión por contenedor de Lambda, abierta en el primer uso.
 - Claves nuevas: usa la publicable y la secreta; `anon` y `service_role` se retiran a finales de 2026 ([Supabase](https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys)).
-- Backups: con una base tan pequeña, haz el volcado a S3 cada día, no cada semana. El bucket caduca los volcados a los 30 días, también las versiones antiguas: es lo que hace que «olvidar» se cumpla.
+- Backups: con una base tan pequeña, haz el volcado a S3 cada día, no cada semana. El bucket caduca los volcados a los 30 días, también las versiones antiguas: es lo que hace que «olvidar» se cumpla. Lo hace el workflow `backup` con `twochi_backup` ([ADR 0012](../adr/0012-dump-with-read-only-role.md), [volcados de la base](../operaciones/restaurar-un-volcado.md)).
 
 ## Tabla `memories` y embeddings
 

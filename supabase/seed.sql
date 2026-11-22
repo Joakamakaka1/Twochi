@@ -3,6 +3,8 @@
 
 -- Dev password for the API's login role; production sets its own from Bitwarden.
 alter role twochi_api password 'twochi-api-local';
+-- And for the dumps' read-only role (ADR 0012).
+alter role twochi_backup password 'twochi-backup-local';
 
 -- A test couple that signs in with email and password, for the front in development.
 insert into auth.users (

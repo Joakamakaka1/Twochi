@@ -45,6 +45,7 @@ Los logs de Actions son públicos y un `plan` ejecuta el código del PR, así qu
 - Cada volcado lleva una clave nueva, con fecha y hora; repetir una clave falla con `412 Precondition Failed`.
 - La subida es un solo `PUT` desde un fichero, hasta 5 GB: `aws s3api put-object --if-none-match '*'`. Cualquier subida sin esa cabecera falla con `AccessDenied`, y también cualquier subida por partes, que no la manda en sus primeros pasos; por eso, nada de `aws s3 cp` ni de tuberías.
 - Restaurar es cosa de una persona, con su usuario de administración: el rol no lee ni lista el bucket.
+- El job de volcado (`.github/workflows/db-dump.yml`) entra en la base con `twochi_backup`, un rol de Postgres que solo lee ([ADR 0012](../../docs/adr/0012-dump-with-read-only-role.md)). Puesta en marcha y restauración: [volcados de la base](../../docs/operaciones/restaurar-un-volcado.md).
 
 ## Antes de aplicar un rol nuevo
 
@@ -69,7 +70,7 @@ Con tu usuario de administración, en otra terminal, fuera del alcance de la IA:
 ## Después del apply
 
 - En Cloudflare, los registros `NS` de `twochi` con los valores de `terraform output zone_name_servers` (TWO-14).
-- En GitHub, como secretos, para que los logs públicos los enmascaren (llevan el ID de la cuenta): `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET` y `TF_ARTIFACTS_BUCKET` en el repositorio, `AWS_APPLY_ROLE_ARN` en el entorno `prod`, y `AWS_BACKUP_ROLE_ARN` y `BACKUPS_BUCKET` en el entorno `backup`. Con ellos y la variable `SUPABASE_URL` (ver `infra/stack`), el `plan` de los PR y el despliegue en `main` dejan de saltarse.
+- En GitHub, como secretos, para que los logs públicos los enmascaren (llevan el ID de la cuenta): `AWS_PLAN_ROLE_ARN`, `TF_STATE_BUCKET` y `TF_ARTIFACTS_BUCKET` en el repositorio, `AWS_APPLY_ROLE_ARN` en el entorno `prod`, y `AWS_BACKUP_ROLE_ARN` y `BACKUPS_BUCKET` en el entorno `backup`. Ese entorno lleva además `BACKUP_DB_PASSWORD`, que no sale de Terraform ([volcados de la base](../../docs/operaciones/restaurar-un-volcado.md)). Con ellos y la variable `SUPABASE_URL` (ver `infra/stack`), el `plan` de los PR y el despliegue en `main` dejan de saltarse.
 
 ## Cambios posteriores
 

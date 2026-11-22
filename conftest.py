@@ -28,6 +28,11 @@ API_URL = os.environ.get(
     "TWOCHI_TEST_DATABASE_URL",
     "postgresql://twochi_api:twochi-api-local@127.0.0.1:55322/postgres",
 )
+# The dumps' read-only role (ADR 0012), with the seed's dev password.
+BACKUP_URL = os.environ.get(
+    "TWOCHI_TEST_BACKUP_URL",
+    "postgresql://twochi_backup:twochi-backup-local@127.0.0.1:55322/postgres",
+)
 
 
 @pytest.fixture
