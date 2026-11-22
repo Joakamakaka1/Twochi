@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
+import { ApiError } from "../../shared";
 import { followAuth, gateQuery } from "./gateQuery";
 import { FakeAuth } from "./testing";
 
@@ -70,5 +71,47 @@ describe("the gate in the query cache", () => {
 
     expect(await gate()).toEqual({ step: "ready", userId: ALICE });
     expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: { name: "Bru" } });
+  });
+});
+
+// A read of the API that fails as the generated client's callers make it fail.
+async function apiReadFails(queryClient: QueryClient, error: ApiError) {
+  await queryClient.query({ queryKey: HOME_KEY, queryFn: () => Promise.reject(error) }).catch(() => undefined);
+}
+
+describe("the gate when the API refuses the token before Auth says anything", () => {
+  it("sends the person to verify the code after a 403 mfa_required", async () => {
+    const auth = new FakeAuth();
+    await enterAtAal2(auth, ALICE);
+    const { queryClient, gate } = await appWith(auth);
+    auth.arriveInAnotherTab(ALICE);
+    expect(await gate()).toEqual({ step: "ready", userId: ALICE });
+
+    await apiReadFails(queryClient, new ApiError(403, "mfa_required"));
+
+    expect(await gate()).toEqual({ step: "verify_totp", factorId: `factor-${ALICE}` });
+    expect(queryClient.getQueryData(HOME_KEY)).toBeUndefined();
+  });
+
+  it("sends the person to sign in after a 401 with the session gone", async () => {
+    const auth = new FakeAuth();
+    await enterAtAal2(auth, ALICE);
+    const { queryClient, gate } = await appWith(auth);
+    auth.loseSessionUnnoticed();
+
+    await apiReadFails(queryClient, new ApiError(401, "unauthenticated"));
+
+    expect(await gate()).toEqual({ step: "sign_in" });
+  });
+
+  it("stays where it is when the API fails for another reason", async () => {
+    const auth = new FakeAuth();
+    await enterAtAal2(auth, ALICE);
+    const { queryClient, gate } = await appWith(auth);
+    auth.arriveInAnotherTab(ALICE);
+
+    await apiReadFails(queryClient, new ApiError(500, "internal_error"));
+
+    expect(await gate()).toEqual({ step: "ready", userId: ALICE });
   });
 });

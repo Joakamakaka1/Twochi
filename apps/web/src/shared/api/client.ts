@@ -17,13 +17,25 @@ export function createApi(token: TokenSource, options: ApiOptions): ApiClient {
   return createApiClient({ baseUrl: options.baseUrl, fetch: createSignedFetch(token, options.baseFetch) });
 }
 
-// The API refused or failed. Only the status: a problem body is never shown as it is.
+// The API refused or failed. Only the status and the problem's stable `code`: the rest
+// of a problem body is never kept or shown.
 export class ApiError extends Error {
   readonly status: number;
+  readonly code: string | null;
 
-  constructor(status: number) {
+  constructor(status: number, code: string | null = null) {
     super(`The API answered ${String(status)}`);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
+}
+
+export function isAuthFailure(_error: unknown): boolean {
+  return false;
+}
+
+// What TanStack Query does on its own in a browser: three more tries, whatever failed.
+export function retryApiRead(failureCount: number, _error: unknown): boolean {
+  return failureCount < 3;
 }

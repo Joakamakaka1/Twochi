@@ -24,6 +24,17 @@ export class FakeAuth implements AuthPort {
     this.#notify();
   }
 
+  // Another tab signed the same browser in again: the stored session is already the new
+  // first-factor one, and this tab has not heard of it yet.
+  arriveInAnotherTab(userId: string): void {
+    this.#session = { userId, level: "aal1" };
+  }
+
+  // The session ended (a refresh that Auth rejected) and this tab has not heard yet.
+  loseSessionUnnoticed(): void {
+    this.#session = null;
+  }
+
   // The person already has a verified TOTP factor from an earlier sign-in.
   giveVerifiedTotp(userId: string): string {
     const factor = { id: `factor-${userId}`, verified: true };

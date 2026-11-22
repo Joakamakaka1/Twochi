@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
+import { describe, expect, it, vi } from "vitest";
 
-import { ApiError, AUTH_HEADER, createApi, texts } from "../../shared";
+import { ApiError, AUTH_HEADER, createApi, isAuthFailure, texts } from "../../shared";
 import type { Home } from "../../shared";
-import { homeHeadline, readHome } from "./home";
+import { homeHeadline, homeQuery, readHome } from "./home";
 
 const BRU: Home = {
   pet: {
@@ -51,6 +52,56 @@ describe("readHome", () => {
 
     expect(failure).toBeInstanceOf(ApiError);
     expect(failure).toMatchObject({ status: 403, message: "The API answered 403" });
+  });
+});
+
+// The API's own problems, as apps/api/src/twochi_api/problems.py builds them.
+function problem(status: number, code: string): () => Response {
+  return () => Response.json({ type: "about:blank", title: "Request failed", status, code }, { status });
+}
+
+// Casa as the screen reads it: an observer that retries as the query says, without the wait.
+async function watchHomeFail(answer: () => Response) {
+  const { api, sent } = apiAnswering(answer);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } });
+  const observer = new QueryObserver(queryClient, homeQuery(api));
+  const stop = observer.subscribe(() => undefined);
+  await vi.waitFor(() => {
+    expect(observer.getCurrentResult().isError).toBe(true);
+  });
+  stop();
+  return { error: observer.getCurrentResult().error, requests: sent.length };
+}
+
+describe("homeQuery when the API refuses the token", () => {
+  it.each([
+    [401, "unauthenticated"],
+    [403, "mfa_required"],
+  ])("takes %i %s for an auth failure and does not ask again", async (status, code) => {
+    const { error, requests } = await watchHomeFail(problem(status, code));
+
+    expect(requests).toBe(1);
+    expect(error).toMatchObject({ status, code });
+    expect(isAuthFailure(error)).toBe(true);
+  });
+
+  it("asks again when the API fails for any other reason", async () => {
+    const { error, requests } = await watchHomeFail(problem(500, "internal_error"));
+
+    expect(isAuthFailure(error)).toBe(false);
+    expect(requests).toBe(4);
+  });
+
+  it("does not take a 403 with another code for an auth failure", async () => {
+    const { error } = await watchHomeFail(problem(403, "not_yours"));
+
+    expect(isAuthFailure(error)).toBe(false);
+  });
+
+  it("keeps no code when the failure is not a problem of the API", async () => {
+    const { error } = await watchHomeFail(() => new Response("<html>Bad gateway</html>", { status: 502 }));
+
+    expect(error).toMatchObject({ status: 502, code: null });
   });
 });
 

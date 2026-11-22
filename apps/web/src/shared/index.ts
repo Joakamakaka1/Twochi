@@ -7,6 +7,8 @@ export {
   CONTENT_SHA256_HEADER,
   createApi,
   createSignedFetch,
+  isAuthFailure,
+  retryApiRead,
   useApi,
 } from "./api";
 export type { ApiClient, ApiOptions, FetchLike, Home, Pet, TokenSource } from "./api";
