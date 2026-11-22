@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { useApi } from "../../shared";
 import type { CareAction, Pet } from "../../shared";
-import { careActionMutation, careFailureText, careOutcomeText, careTap } from "./careActions";
+import { careActionMutation, careFailureText, careOutcomeText, careTap, onHomeRead } from "./careActions";
 import { homeQuery, refreshHomeOnForeground } from "./home";
 
 export function useHome() {
@@ -29,6 +29,8 @@ export function useNow(periodMs: number): Date {
 export function useCareActions(petId: Pet["id"]) {
   const queryClient = useQueryClient();
   const mutation = useMutation(careActionMutation(useApi(), petId, queryClient));
+  const { reset } = mutation;
+  useEffect(() => onHomeRead(queryClient, reset), [queryClient, reset]);
   return {
     tap: (action: CareAction) => {
       mutation.mutate(careTap(action));

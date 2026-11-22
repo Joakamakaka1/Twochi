@@ -193,7 +193,7 @@ describe("the text of a refusal", () => {
     await observer.mutate(careTap("play"));
     expect(careOutcomeText(observer.getCurrentResult().data)).toBe(texts.care.rejections.too_tired);
 
-    await queryClient.fetchQuery(homeQuery(api));
+    await queryClient.query(homeQuery(api));
     expect(careOutcomeText(observer.getCurrentResult().data)).toBeNull();
   });
 

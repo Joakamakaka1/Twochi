@@ -1,4 +1,4 @@
-import { mutationOptions } from "@tanstack/react-query";
+import { hashKey, mutationOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { apiError, isAuthFailure, retryApiWrite, texts } from "../../shared";
@@ -61,6 +61,14 @@ export function careFailureText(error: unknown): string | null {
   return error === null || isAuthFailure(error) ? null : texts.failure;
 }
 
-export function onHomeRead(_queryClient: QueryClient, _read: () => void): () => void {
-  return () => undefined;
+/**
+ * Calls `read` each time Casa is read again from the API, not when a care response
+ * writes it; returns how to stop. A refusal's text is about the pet before that read.
+ */
+export function onHomeRead(queryClient: QueryClient, read: () => void): () => void {
+  const homeHash = hashKey(HOME_KEY);
+  return queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== "updated" || event.query.queryHash !== homeHash) return;
+    if (event.action.type === "success" && event.action.manual !== true) read();
+  });
 }
