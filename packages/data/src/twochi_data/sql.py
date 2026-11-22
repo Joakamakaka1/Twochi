@@ -54,15 +54,15 @@ class Connection(Protocol):
 CONNECT_TIMEOUT_SECONDS = 5
 COMMAND_TIMEOUT_SECONDS = 10
 
-# The root that signs the pooler and the database of every hosted Supabase project: the
-# dashboard's `prod-ca-2021.crt`, valid until 2031-04-26 (ADR 0010). It ships inside
-# the package, so the Lambda never depends on the image's trust store.
+# The root that signs Supabase's pooler: the dashboard's `prod-ca-2021.crt`, valid
+# until 2031-04-26 (ADR 0010). It ships inside the package, so the Lambda never
+# depends on the image's trust store.
 SUPABASE_ROOT_CA = (
     files(__package__).joinpath("supabase-root-2021-ca.pem").read_text(encoding="ascii")
 )
 
 
-def _verify_full() -> ssl.SSLContext:
+def supabase_tls() -> ssl.SSLContext:
     """libpq's `verify-full`: a chain up to Supabase's root, for the host in the DSN.
 
     Only that root is trusted, not the system's: a public CA could not vouch for a
@@ -113,7 +113,7 @@ async def connect(dsn: str, *, require_tls: bool = False) -> Connection:
         statement_cache_size=0,
         timeout=CONNECT_TIMEOUT_SECONDS,
         command_timeout=COMMAND_TIMEOUT_SECONDS,
-        ssl=_verify_full() if require_tls else None,
+        ssl=supabase_tls() if require_tls else None,
     )
     return _AsyncpgConnection(connection)
 

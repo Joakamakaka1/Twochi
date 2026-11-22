@@ -2,12 +2,15 @@
 
 import asyncio
 import contextlib
+import hashlib
 import ipaddress
+import logging
 import ssl
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from cryptography import x509
@@ -16,8 +19,12 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store, VerificationError
 
+from twochi_application.actors import UserActor
+from twochi_application.ports import DatabaseUnavailableError
 from twochi_data import sql
-from twochi_data.sql import CONNECT_ERRORS, SUPABASE_ROOT_CA, connect
+from twochi_data.database import PostgresDatabase
+from twochi_data.sql import CONNECT_ERRORS, SUPABASE_ROOT_CA, connect, supabase_tls
+from twochi_domain.ids import UserId
 
 pytestmark = pytest.mark.anyio
 
@@ -29,6 +36,11 @@ CHECKED_AT = datetime(2026, 11, 22, tzinfo=UTC)
 
 SSL_REQUEST = (8).to_bytes(4) + (80877103).to_bytes(4)
 IMPOSTOR_DSN = "postgresql://twochi_api:never-sent@127.0.0.1:{port}/postgres"
+X509_V_ERR_IP_ADDRESS_MISMATCH = 64
+# SHA-256 of Supabase Root 2021 CA, as ADR 0010 records it.
+SUPABASE_ROOT_SHA256 = (
+    "807025ad50d4ed219d2c9c7d299c004f824eb00cf7f65afef607d07b72e6cafa"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,21 +165,50 @@ async def test_a_server_supabase_did_not_sign_is_refused(tmp_path: Path) -> None
             await connect(IMPOSTOR_DSN.format(port=port), require_tls=True)
 
 
-async def test_the_dsn_cannot_weaken_the_check(tmp_path: Path) -> None:
+@pytest.mark.parametrize("sslmode", ["disable", "allow", "prefer", "require"])
+async def test_the_dsn_cannot_weaken_the_check(tmp_path: Path, sslmode: str) -> None:
     async with _impostor(_server(tmp_path, None, [LOOPBACK])) as port:
-        dsn = IMPOSTOR_DSN.format(port=port) + "?sslmode=require"
+        dsn = IMPOSTOR_DSN.format(port=port) + f"?sslmode={sslmode}"
         with pytest.raises(ssl.SSLCertVerificationError):
             await connect(dsn, require_tls=True)
 
 
+async def test_the_environment_cannot_weaken_the_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PGSSLMODE", "disable")
+    async with _impostor(_server(tmp_path, None, [LOOPBACK])) as port:
+        with pytest.raises(ssl.SSLCertVerificationError):
+            await connect(IMPOSTOR_DSN.format(port=port), require_tls=True)
+
+
+async def test_a_refused_certificate_is_logged_and_unavailable(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    actor = UserActor(user_id=UserId(uuid4()), claims={})
+    async with _impostor(_server(tmp_path, None, [LOOPBACK])) as port:
+        db = PostgresDatabase(IMPOSTOR_DSN.format(port=port))
+        with (
+            caplog.at_level(logging.ERROR, logger="twochi_data.database"),
+            pytest.raises(DatabaseUnavailableError),
+        ):
+            async with db.transaction(actor):
+                pass
+    assert "SSLCertVerificationError" in caplog.text
+    assert "never-sent" not in caplog.text
+
+
+# The host tests swap the trusted root for a test CA: no other way puts a CA Supabase
+# never signed in front of `connect`, and the real root's key is not ours.
 async def test_a_trusted_certificate_for_another_host_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ca = _test_ca()
     monkeypatch.setattr(sql, "SUPABASE_ROOT_CA", ca.pem())
     async with _impostor(_server(tmp_path, ca, [ANOTHER_HOST])) as port:
-        with pytest.raises(ssl.SSLCertVerificationError, match="IP address mismatch"):
+        with pytest.raises(ssl.SSLCertVerificationError) as raised:
             await connect(IMPOSTOR_DSN.format(port=port), require_tls=True)
+    assert raised.value.verify_code == X509_V_ERR_IP_ADDRESS_MISMATCH
 
 
 async def test_a_trusted_certificate_for_the_host_passes_the_handshake(
@@ -180,6 +221,19 @@ async def test_a_trusted_certificate_for_the_host_passes_the_handshake(
         with pytest.raises(CONNECT_ERRORS) as raised:
             await connect(IMPOSTOR_DSN.format(port=port), require_tls=True)
     assert not isinstance(raised.value, ssl.SSLError)
+
+
+def test_only_supabase_root_is_trusted_and_the_host_is_checked() -> None:
+    # The impostor tests cannot tell this root apart from a public CA in the system
+    # store: no public CA signs for 127.0.0.1.
+    context = supabase_tls()
+    trusted = [
+        hashlib.sha256(der).hexdigest()
+        for der in context.get_ca_certs(binary_form=True)
+    ]
+    assert trusted == [SUPABASE_ROOT_SHA256]
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname
 
 
 def _verify_pooler_chain(host: str) -> None:

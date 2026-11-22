@@ -8,6 +8,7 @@ forgets its filter still cannot cross couples. Nothing here runs outside a trans
 import asyncio
 import contextlib
 import json
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -22,6 +23,8 @@ from twochi_data.sql import (
     connect,
     connection_lost,
 )
+
+_log = logging.getLogger(__name__)
 
 
 class PostgresTransaction:
@@ -64,6 +67,9 @@ class PostgresDatabase:
                     self._dsn, require_tls=self._require_tls
                 )
             except CONNECT_ERRORS as error:
+                # Only the type: it tells a refused certificate from an outage, and
+                # asyncpg's messages can name the role or the host.
+                _log.error("database connect failed: %s", type(error).__name__)
                 raise DatabaseUnavailableError from error
         return self._connection
 

@@ -31,5 +31,5 @@ Supabase recomienda `verify-full` con la CA que se descarga del panel (Database 
 
 ## Consecuencias
 
-- Si Supabase cambia de CA o el pooler deja de encadenar a esta raíz, la API responde «no disponible» hasta que se actualice el fichero. Antes de 2031-04-26 hay que sustituirlo por la nueva CA del panel. Los tests de `packages/data/tests/test_tls.py` usan una cadena del pooler guardada y lo dirán al cambiar el fichero.
+- Si Supabase cambia de CA o el pooler deja de encadenar a esta raíz, la API responde «no disponible» hasta que se actualice el fichero. El log de la Lambda lo distingue de una caída: `database connect failed: SSLCertVerificationError`. Antes de 2031-04-26 hay que sustituirlo por la nueva CA del panel. Los tests de `packages/data/tests/test_tls.py` usan una cadena del pooler guardada y lo dirán al cambiar el fichero.
 - Tras desplegar, la prueba de humo confirma que la API sigue conectando a producción.
