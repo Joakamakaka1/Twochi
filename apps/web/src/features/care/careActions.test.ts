@@ -28,7 +28,7 @@ interface Sent {
 }
 
 // The API as a function: records each care action it was sent and answers in turn.
-function apiAnswering(...answers: (() => Response)[]) {
+function apiAnswering(...answers: (() => Response | Promise<Response>)[]) {
   const sent: Sent[] = [];
   const api = createApi(() => Promise.resolve("jwt-1"), {
     baseUrl: "https://twochi.test",
@@ -133,5 +133,50 @@ describe("careFailureText", () => {
 
   it("says nothing when no tap failed", () => {
     expect(careFailureText(null)).toBeNull();
+  });
+});
+
+// An answer the test releases when it wants, as a slow network or a retry would.
+function lateAnswer() {
+  let release: (response: Response) => void = () => undefined;
+  const answer = new Promise<Response>((resolve) => {
+    release = resolve;
+  });
+  return { answer: () => answer, release };
+}
+
+describe("a care action answered after the person left", () => {
+  it("leaves the cache empty once the person was forgotten", async () => {
+    const late = lateAnswer();
+    const { api, sent } = apiAnswering(late.answer);
+    const { queryClient, observer } = careFor(api);
+    const tap = observer.mutate(careTap("feed"));
+    await vi.waitFor(() => {
+      expect(sent).toHaveLength(1);
+    });
+
+    // What signing out does to the cache (forgetPerson in features/auth).
+    queryClient.removeQueries();
+    late.release(Response.json(applied));
+    await tap;
+
+    expect(queryClient.getQueryData(HOME_KEY)).toBeUndefined();
+  });
+
+  it("never writes into the Casa of the next person who signs in", async () => {
+    const late = lateAnswer();
+    const { api, sent } = apiAnswering(late.answer);
+    const { queryClient, observer } = careFor(api);
+    const tap = observer.mutate(careTap("feed"));
+    await vi.waitFor(() => {
+      expect(sent).toHaveLength(1);
+    });
+
+    queryClient.removeQueries();
+    queryClient.setQueryData<Home>(HOME_KEY, { pet: null });
+    late.release(Response.json(applied));
+    await tap;
+
+    expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: null });
   });
 });
