@@ -2,6 +2,7 @@ export { needValueAt } from "./lib/needs";
 export type { NeedReading } from "./lib/needs";
 export {
   ApiError,
+  apiError,
   ApiProvider,
   AUTH_HEADER,
   CONTENT_SHA256_HEADER,

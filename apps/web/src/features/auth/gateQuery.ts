@@ -1,6 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
+import { isAuthFailure } from "../../shared";
 import type { AuthPort } from "./authPort";
 import { resolveGate } from "./gate";
 import type { Gate } from "./gate";
@@ -25,11 +26,22 @@ export function gateQuery(auth: AuthPort, queryClient: QueryClient) {
   });
 }
 
-// A change of session is a signal, as a Realtime event is: it only invalidates.
+// A change of session is a signal, as a Realtime event is: it only invalidates. The API
+// refusing the token is the same signal, and can come first: another tab signed in
+// again, or a refresh failed, and Auth's event has not reached this tab yet.
 export function followAuth(auth: AuthPort, queryClient: QueryClient): () => void {
-  return auth.onChange(() => {
+  const resolveAgain = () => {
     void queryClient.invalidateQueries({ queryKey: GATE_KEY });
+  };
+  const stopAuth = auth.onChange(resolveAgain);
+  const stopApi = queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== "updated" || event.action.type !== "error") return;
+    if (isAuthFailure(event.action.error)) resolveAgain();
   });
+  return () => {
+    stopAuth();
+    stopApi();
+  };
 }
 
 function isSamePersonInside(before: Gate | undefined, gate: Gate): boolean {

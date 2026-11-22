@@ -31,11 +31,26 @@ export class ApiError extends Error {
   }
 }
 
-export function isAuthFailure(_error: unknown): boolean {
-  return false;
+const PROBLEM_CODE = /^[a-z_]{1,64}$/;
+
+// From a response the generated client could not read as data: its status and, when the
+// body is one of the API's problems (application/problem+json), its `code`.
+export function apiError(status: number, body: unknown): ApiError {
+  const code = typeof body === "object" && body !== null && "code" in body ? body.code : null;
+  return new ApiError(status, typeof code === "string" && PROBLEM_CODE.test(code) ? code : null);
 }
 
-// What TanStack Query does on its own in a browser: three more tries, whatever failed.
-export function retryApiRead(failureCount: number, _error: unknown): boolean {
-  return failureCount < 3;
+// The API did not accept the token: nobody is signed in (401) or this session lacks
+// the second factor (403 mfa_required). The gate resolves again on it.
+export function isAuthFailure(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  return error.status === 401 || (error.status === 403 && error.code === "mfa_required");
+}
+
+const RETRIES = 3;
+
+// TanStack Query's own three retries, except after an auth failure: the same token
+// would get the same answer, and the person would wait for nothing.
+export function retryApiRead(failureCount: number, error: unknown): boolean {
+  return failureCount < RETRIES && !isAuthFailure(error);
 }

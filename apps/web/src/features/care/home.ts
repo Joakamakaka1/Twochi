@@ -1,13 +1,13 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { ApiError, retryApiRead, texts } from "../../shared";
+import { apiError, retryApiRead, texts } from "../../shared";
 import type { ApiClient, Home } from "../../shared";
 
 export const HOME_KEY = ["home"] as const;
 
 export async function readHome(api: ApiClient): Promise<Home> {
-  const { data, response } = await api.GET("/api/homes/me");
-  if (data === undefined) throw new ApiError(response.status);
+  const { data, error, response } = await api.GET("/api/homes/me");
+  if (data === undefined) throw apiError(response.status, error);
   return data;
 }
 
