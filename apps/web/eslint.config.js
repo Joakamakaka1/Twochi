@@ -66,4 +66,27 @@ export default defineConfig([
   restrictImports(["src/*.{ts,tsx}"], [deepImport]),
   ...LAYERS.map(layerImports),
   ...crossFeatureImports,
+  // Network (Arquitectura y convenciones, «Convenciones del front»): supabase-js only in the
+  // auth feature, and fetch only behind the generated client in shared/api. The typescript-eslint
+  // twin of the import rule, so it adds to the folder rules above instead of replacing them.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/features/auth/**"],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        { patterns: [{ regex: "^@supabase/", message: "supabase-js is only imported in features/auth." }] },
+      ],
+    },
+  },
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/shared/api/**"],
+    rules: {
+      "no-restricted-globals": [
+        "error",
+        { name: "fetch", message: "No fetch outside shared/api: use the generated client (useApi)." },
+      ],
+    },
+  },
 ]);
