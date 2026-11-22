@@ -5,8 +5,10 @@ module is the only place that touches asyncpg's API; the rest of `twochi_data` s
 these protocols instead.
 """
 
+import ssl
 from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
+from importlib.resources import files
 from typing import Any, Protocol, cast
 from uuid import UUID
 
@@ -52,6 +54,22 @@ class Connection(Protocol):
 CONNECT_TIMEOUT_SECONDS = 5
 COMMAND_TIMEOUT_SECONDS = 10
 
+# The root that signs the pooler and the database of every hosted Supabase project: the
+# dashboard's `prod-ca-2021.crt`, valid until 2031-04-26 (ADR 0010). It ships inside
+# the package, so the Lambda never depends on the image's trust store.
+SUPABASE_ROOT_CA = (
+    files(__package__).joinpath("supabase-root-2021-ca.pem").read_text(encoding="ascii")
+)
+
+
+def _verify_full() -> ssl.SSLContext:
+    """libpq's `verify-full`: a chain up to Supabase's root, for the host in the DSN.
+
+    Only that root is trusted, not the system's: a public CA could not vouch for a
+    Supabase host. asyncpg passes the DSN host as the name to check.
+    """
+    return ssl.create_default_context(cadata=SUPABASE_ROOT_CA)
+
 
 class _AsyncpgConnection:
     """asyncpg's connection under the `Connection` protocol.
@@ -85,8 +103,9 @@ class _AsyncpgConnection:
 async def connect(dsn: str, *, require_tls: bool = False) -> Connection:
     """Open a connection for the transaction pooler: no prepared statements.
 
-    With `require_tls`, the connection is encrypted or refused, whatever the DSN says;
-    asyncpg's default (`prefer`) would fall back to plain text.
+    With `require_tls`, the server proves it is Supabase for the DSN's host before the
+    password goes out, or the connection is refused, whatever the DSN's `sslmode` says.
+    Without it, asyncpg's default (`prefer`) applies: only local Postgres needs that.
     """
     open_connection: Any = asyncpg.connect  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     connection = await open_connection(
@@ -94,7 +113,7 @@ async def connect(dsn: str, *, require_tls: bool = False) -> Connection:
         statement_cache_size=0,
         timeout=CONNECT_TIMEOUT_SECONDS,
         command_timeout=COMMAND_TIMEOUT_SECONDS,
-        ssl="require" if require_tls else None,
+        ssl=_verify_full() if require_tls else None,
     )
     return _AsyncpgConnection(connection)
 

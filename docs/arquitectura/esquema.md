@@ -140,7 +140,8 @@ create index on app.pet_events (couple_id, created_at desc);
 ### Conexión desde Lambda
 - Pooler compartido en modo transacción, puerto 6543, que es IPv4 en todos los planes ([Supabase](https://supabase.com/docs/guides/database/connecting-to-postgres)).
 - Sin prepared statements: en `asyncpg`, `statement_cache_size=0`.
-- SSL en `require` y una sola conexión por contenedor de Lambda, abierta en el primer uso.
+- TLS en `verify-full` contra la CA raíz de Supabase, que va dentro de `twochi_data` ([ADR 0010](../adr/0010-postgres-tls-verify-full.md)).
+- Una sola conexión por contenedor de Lambda, abierta en el primer uso.
 - Claves nuevas: usa la publicable y la secreta; `anon` y `service_role` se retiran a finales de 2026 ([Supabase](https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys)).
 - Backups: con una base tan pequeña, haz el volcado a S3 cada día, no cada semana. El bucket caduca los volcados a los 30 días, también las versiones antiguas: es lo que hace que «olvidar» se cumpla.
 
