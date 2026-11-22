@@ -9,7 +9,14 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from slot import SlotError, config_problems, main, slot_config
+from slot import (
+    SlotError,
+    config_problems,
+    main,
+    removal_problems,
+    slot_config,
+    slot_number,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -158,3 +165,70 @@ def test_the_config_git_holds_is_the_main_folders() -> None:
     ).stdout
 
     assert config_problems(held) == []
+
+
+# --- Which slot, and when it may go ---------------------------------------------------
+
+
+def test_a_slot_is_a_number_from_one_to_nine() -> None:
+    assert [slot_number(raw) for raw in ("1", "3", "9")] == [1, 3, 9]
+
+
+@pytest.mark.parametrize("raw", ["0", "", "-1", "1.5", "one", "10", "00", "twochi"])
+def test_the_main_folder_and_anything_else_is_no_slot(raw: str) -> None:
+    with pytest.raises(SlotError):
+        slot_number(raw)
+
+
+@pytest.fixture
+def no_commands(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fails the test if anything is run: a refusal must come before git and Docker."""
+
+    def refuse(*args: object, **kwargs: object) -> None:
+        raise AssertionError(f"ran {args}")
+
+    monkeypatch.setattr(subprocess, "run", refuse)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["down", "0"],
+        ["down", "0", "--force"],
+        ["down", "twochi"],
+        ["down", ""],
+        ["up", "0", "two-0-some-branch"],
+    ],
+)
+@pytest.mark.usefixtures("no_commands")
+def test_slot_zero_is_refused_before_anything_runs(
+    command: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(command) == 1
+    assert "main folder" in capsys.readouterr().err
+
+
+@pytest.mark.usefixtures("no_commands")
+def test_a_missing_slot_is_a_usage_error() -> None:
+    with pytest.raises(SystemExit) as stopped:
+        main(["down"])
+
+    assert stopped.value.code == 2
+
+
+def test_a_clean_and_pushed_worktree_may_be_removed() -> None:
+    assert removal_problems(status="", unpushed="") == []
+
+
+def test_uncommitted_changes_keep_the_worktree() -> None:
+    problems = removal_problems(status=" M justfile\n?? notes.md\n", unpushed="")
+
+    assert len(problems) == 1
+    assert "2 uncommitted" in problems[0]
+
+
+def test_unpushed_commits_keep_the_worktree() -> None:
+    problems = removal_problems(status="", unpushed="d23ce60 one\n3ac9c90 two\n")
+
+    assert len(problems) == 1
+    assert "2 unpushed" in problems[0]
