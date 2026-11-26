@@ -27,6 +27,28 @@ BASE = "origin/main"
 FLUJO = ".github/scripts/flujo.py"
 # Any login but Dependabot's: flujo exempts that one from the id and the sections.
 AUTHOR = "local"
+# What git exports to a hook, as `git rev-parse --local-env-vars` lists it. Inherited,
+# GIT_DIR and its kin point every git command at the repository that runs the hook,
+# not at `repo`.
+_LOCAL_GIT_VARIABLES = frozenset(
+    {
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_CONFIG",
+        "GIT_CONFIG_PARAMETERS",
+        "GIT_CONFIG_COUNT",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_IMPLICIT_WORK_TREE",
+        "GIT_GRAFT_FILE",
+        "GIT_INDEX_FILE",
+        "GIT_NO_REPLACE_OBJECTS",
+        "GIT_REPLACE_REF_BASE",
+        "GIT_PREFIX",
+        "GIT_SHALLOW_FILE",
+        "GIT_COMMON_DIR",
+    }
+)
 
 
 class GitError(Exception):
@@ -40,6 +62,7 @@ def _git(repo: Path, *args: str) -> bytes:
     result = subprocess.run(  # noqa: S603 - git resolved on PATH, arguments built here
         [executable, "-c", "core.quotePath=false", *args],
         cwd=repo,
+        env={k: v for k, v in os.environ.items() if k not in _LOCAL_GIT_VARIABLES},
         capture_output=True,
         check=False,
     )
