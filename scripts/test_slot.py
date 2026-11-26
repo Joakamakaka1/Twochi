@@ -607,3 +607,17 @@ def test_a_folder_with_its_own_git_is_not_taken_for_leftovers(
     assert (slot_2(repo) / ".git").is_dir()
     assert "remove it by hand" in capsys.readouterr().err
     assert not any(named[0] == "supabase" for named in windows_git)
+
+
+def test_leftovers_that_kept_a_git_file_to_a_dropped_worktree_are_removed(
+    repo: Path, windows_git: list[list[str]]
+) -> None:
+    # Git deletes in folder order and stops at a held file: one under `.claude/` sorts
+    # before `.git`, whose file then points at what git already dropped.
+    gone = repo / ".git" / "worktrees" / "slot-2"
+    leave_leftovers(repo)
+    (slot_2(repo) / ".git").write_text(f"gitdir: {gone.as_posix()}\n", encoding="utf-8")
+
+    assert main(["down", "2"], checkout=repo) == 0
+
+    assert not slot_2(repo).exists()
