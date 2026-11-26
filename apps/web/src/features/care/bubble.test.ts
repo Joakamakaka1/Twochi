@@ -142,8 +142,14 @@ describe("the bubble after a care action", () => {
     expect(chooseBubble(stateOf({}), healed, FIRST)).toBe(phrases.healed[0]);
   });
 
-  it("says it feels unwell when the action left it sick", () => {
+  it("says how it took what it was given, even when that left it sick", () => {
     const fellSick = outcome("play", { reaction: { item_key: "ball", affinity: 2 }, sickness: "fell_sick" });
+
+    expect(chooseBubble(stateOf({ mood: "sick" }), fellSick, FIRST)).toBe(phrases.reactions.activity[2][0]("Pelota"));
+  });
+
+  it("says it feels unwell when an action without an item left it sick", () => {
+    const fellSick = outcome("pet", { deltas: { affection: 15 }, sickness: "fell_sick" });
 
     expect(chooseBubble(stateOf({ mood: "sick" }), fellSick, FIRST)).toBe(phrases.fellSick[0]);
   });

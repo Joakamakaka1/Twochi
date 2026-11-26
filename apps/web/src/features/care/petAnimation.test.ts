@@ -79,10 +79,14 @@ describe("reactionAnimation", () => {
     expect(reactionAnimation("bathe", result({ sickness: "healed" }))).toBe("happy");
   });
 
-  it("looks sad when the action leaves it sick, whatever it was given", () => {
+  it("reacts to what it was given even when that leaves it sick", () => {
     const sickAfterAFavourite = result({ reaction: { item_key: "ball", affinity: 2 }, sickness: "fell_sick" });
 
-    expect(reactionAnimation("play", sickAfterAFavourite)).toBe("sad");
+    expect(reactionAnimation("play", sickAfterAFavourite)).toBe("happy");
+  });
+
+  it("looks sad when an action without an item leaves it sick", () => {
+    expect(reactionAnimation("pet", result({ sickness: "fell_sick" }))).toBe("sad");
   });
 });
 
