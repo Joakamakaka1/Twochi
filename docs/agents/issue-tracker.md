@@ -47,5 +47,5 @@ Decidido en el [ADR 0014](../adr/0014-game-first-care-is-v1-and-the-ai-merges.md
 - Tipos: `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci` y `chore`. Un `!` tras el ámbito marca un cambio que rompe un contrato.
 - La fusión es siempre squash: el título del PR es el commit que queda en `main`.
 - Solo los triviales y los PR de Dependabot van sin identificador. Todo trabajo normal o complejo tiene su issue, aunque sea de una línea; el check `flujo` lo exige en las zonas delicadas.
-- Cuerpo del PR: evidencia, prueba de antes y después, y peligro de fusión.
+- Cuerpo del PR: las secciones de la plantilla. Con identificador, el check `flujo` exige «Tamaño» y, si no es trivial, «Revisión»; en zonas delicadas, además, «Evidencia» y «Peligro de fusión», y el tamaño no puede ser trivial ni normal.
 - Antes de abrir el PR, `just check` completo en local.

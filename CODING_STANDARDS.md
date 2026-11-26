@@ -42,6 +42,9 @@ Destilado de [Arquitectura y convenciones](docs/arquitectura/arquitectura-y-conv
 
 - Un PR, una rebanada: un refactor y una funcionalidad van en PR distintos, primero el refactor. [→](docs/arquitectura/arquitectura-y-convenciones.md#git-y-pull-requests)
 - Un bug llega con su test, primero en rojo. [→](docs/arquitectura/arquitectura-y-convenciones.md#tests)
+- El test en rojo va en su propio commit, antes del código que lo pasa; el cuerpo del PR copia la salida en rojo.
+- El tamaño lo decide la zona, no las líneas: un cambio pequeño en zona delicada es delicado.
+- Un PR de más de unas 600 líneas sin contar lockfiles dice por qué no se partió.
 - Los tests pasan por la costura pública: caso de uso o función del motor, nunca un detalle interno. [→](docs/arquitectura/arquitectura-y-convenciones.md#tests)
 - Los logs nunca llevan el texto de un mensaje, de una memoria o de la ficha. [→](docs/arquitectura/arquitectura-y-convenciones.md#convenciones-de-python)
 - Comentarios y docstrings solo donde explican un porqué. [→](docs/arquitectura/arquitectura-y-convenciones.md#convenciones-de-python)
