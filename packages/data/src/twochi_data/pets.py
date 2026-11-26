@@ -24,6 +24,12 @@ join app.pet_needs n on n.pet_id = p.id
 where p.caretaker_user_id = $1
 """
 
+_REPRESENTING = """
+select p.id
+from app.pets p
+where p.represents_user_id = $1
+"""
+
 # Locks the pet's row and its five needs: a second action on the same pet waits here
 # until the first commits, then reads what the first one wrote.
 _LOCK = """
@@ -57,6 +63,11 @@ class PostgresPetRepository:
         """The pet this person cares for, or None if it does not exist or is hidden."""
         rows = await self._connection.fetch(_CARED_BY, user_id)
         return _to_pet(rows) if rows else None
+
+    async def representing(self, user_id: UserId) -> PetId | None:
+        """The pet that represents this person, or None if not born yet or hidden."""
+        rows = await self._connection.fetch(_REPRESENTING, user_id)
+        return PetId(uuid_at(rows[0], "id")) if rows else None
 
     async def lock(self, pet_id: PetId) -> Pet | None:
         """A pet and its needs, locked until the transaction ends; None if hidden."""

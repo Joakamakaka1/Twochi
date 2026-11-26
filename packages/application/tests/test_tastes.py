@@ -9,6 +9,9 @@ from uuid import uuid4
 
 import pytest
 from conftest import API_URL, Couples, TestCouple
+
+from twochi_application.actors import UserActor
+from twochi_application.care import ApplyCareAction, apply_care_action
 from twochi_application.tastes import (
     MyTastes,
     NoPetYetError,
@@ -17,9 +20,6 @@ from twochi_application.tastes import (
     get_my_tastes,
     rate_taste,
 )
-
-from twochi_application.actors import UserActor
-from twochi_application.care import ApplyCareAction, apply_care_action
 from twochi_application.testing import FixedClock
 from twochi_data.database import PostgresDatabase
 from twochi_domain.care import CareAction, Reaction
