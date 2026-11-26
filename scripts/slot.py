@@ -251,7 +251,10 @@ def _output(*args: str, cwd: Path) -> str:
 
 def _has_ref(ref: str, cwd: Path) -> bool:
     result = subprocess.run(  # noqa: S603
-        _command(["git", "show-ref", "--verify", "--quiet", ref]), cwd=cwd, check=False
+        _command(["git", "show-ref", "--verify", "--quiet", ref]),
+        cwd=cwd,
+        env=_env(),
+        check=False,
     )
     return result.returncode == 0
 
