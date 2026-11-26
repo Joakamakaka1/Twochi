@@ -50,6 +50,48 @@ export function careActionMutation(api: ApiClient, petId: Pet["id"], queryClient
   });
 }
 
+/** The care-action mutation as Casa's taps use it: useMutation's `mutate` and `reset`. */
+export interface CareMutation {
+  mutate: (
+    tap: CareTap,
+    callbacks: { onSuccess: (result: CareActionResult) => void; onSettled: () => void },
+  ) => void;
+  reset: () => void;
+}
+
+/** Casa's care taps, the button's and the figure's, over the mutation. */
+export interface CareTaps {
+  tap: (action: CareAction) => void;
+  /** The tap that failed, sent again with its own key. */
+  retry: () => void;
+  /** Casa was read again from the API (see onHomeRead). */
+  homeRead: () => void;
+}
+
+export function careTaps(mutation: CareMutation, onOutcome: (action: CareAction, result: CareActionResult) => void): CareTaps {
+  let last: CareTap | undefined;
+  const send = (tap: CareTap) => {
+    last = tap;
+    mutation.mutate(tap, {
+      onSuccess: (result) => {
+        onOutcome(tap.action, result);
+      },
+      onSettled: () => undefined,
+    });
+  };
+  return {
+    tap: (action) => {
+      send(careTap(action));
+    },
+    retry: () => {
+      if (last !== undefined) send(last);
+    },
+    homeRead: () => {
+      mutation.reset();
+    },
+  };
+}
+
 /** What Casa says after a tap: why the engine refused it, or nothing. */
 export function careOutcomeText(result: CareActionResult | undefined): string | null {
   if (result?.rejection == null) return null;
