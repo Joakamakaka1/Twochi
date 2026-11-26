@@ -1,9 +1,8 @@
 import json
 from pathlib import Path
 
-import flujo
 import pytest
-from flujo import PullRequest, check, load, main
+from flujo import PullRequest, check, load, main, warnings_for
 
 COMPLETE_BODY = (
     "## Tamaño\n\nDelicado: toca el CI.\n\n"
@@ -283,7 +282,7 @@ def test_pr24_body_declared_normal_fails_for_its_sensitive_paths() -> None:
 def test_code_without_tests_warns_but_passes(path: str) -> None:
     untested = pr("feat(domain): add bonus (TWO-42)", changed=(path,))
     assert check(untested) == []
-    warnings = flujo.warnings_for(untested)
+    warnings = warnings_for(untested)
     assert len(warnings) == 1
     assert path in warnings[0]
 
@@ -299,10 +298,7 @@ def test_code_without_tests_warns_but_passes(path: str) -> None:
 )
 def test_code_with_a_test_does_not_warn(test_path: str) -> None:
     changed = ("packages/domain/src/twochi_domain/needs.py", test_path)
-    assert (
-        flujo.warnings_for(pr("feat(domain): add bonus (TWO-42)", changed=changed))
-        == []
-    )
+    assert warnings_for(pr("feat(domain): add bonus (TWO-42)", changed=changed)) == []
 
 
 @pytest.mark.parametrize(
@@ -316,7 +312,7 @@ def test_code_with_a_test_does_not_warn(test_path: str) -> None:
     ],
 )
 def test_changes_that_are_not_app_code_do_not_warn(path: str) -> None:
-    assert flujo.warnings_for(pr("chore: tidy (TWO-42)", changed=(path,))) == []
+    assert warnings_for(pr("chore: tidy (TWO-42)", changed=(path,))) == []
 
 
 def test_dependabot_does_not_warn() -> None:
@@ -326,7 +322,7 @@ def test_dependabot_does_not_warn() -> None:
         author="dependabot[bot]",
         changed=("apps/web/src/shared/api/client.ts",),
     )
-    assert flujo.warnings_for(bump) == []
+    assert warnings_for(bump) == []
 
 
 def write_event(tmp_path: Path, *, title: str, body: str, changed: str) -> Path:
