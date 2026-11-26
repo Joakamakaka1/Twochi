@@ -5,6 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from twochi_api.catalogue import AffinityByItem
 from twochi_application.home import Home
 from twochi_domain.needs import Need
 from twochi_domain.pet import Mood, NeedReading, PetReading
@@ -35,15 +36,25 @@ class PetOut(BaseModel):
     needs: NeedsOut
 
 
+class HomePetOut(PetOut):
+    """The pet the caller cares for, with the tastes they discovered: for each item they
+    gave, the affinity seen the last time. Never the pet's tastes (ADR 0015)."""
+
+    discovered: AffinityByItem
+
+
 class HomeOut(BaseModel):
     """The pet the caller cares for, or null until both people have arrived."""
 
-    pet: PetOut | None
+    pet: HomePetOut | None
 
 
 def home_out(home: Home) -> HomeOut:
     """Map the use case's result to the response."""
-    return HomeOut(pet=None if home.pet is None else pet_out(home.pet))
+    if home.pet is None:
+        return HomeOut(pet=None)
+    pet = pet_out(home.pet)
+    return HomeOut(pet=HomePetOut(**dict(pet), discovered=dict(home.discovered)))
 
 
 def pet_out(reading: PetReading) -> PetOut:

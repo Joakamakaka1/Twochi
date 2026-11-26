@@ -179,7 +179,48 @@ export interface components {
          * @description The pet the caller cares for, or null until both people have arrived.
          */
         HomeOut: {
-            pet: components["schemas"]["PetOut"] | null;
+            pet: components["schemas"]["HomePetOut"] | null;
+        };
+        /**
+         * HomePetOut
+         * @description The pet the caller cares for, with the tastes they discovered: for each item they
+         *     gave, the affinity seen the last time. Never the pet's tastes (ADR 0015).
+         */
+        HomePetOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Model Key */
+            model_key: string;
+            /** Asleep */
+            asleep: boolean;
+            mood: components["schemas"]["Mood"];
+            needs: components["schemas"]["NeedsOut"];
+            /** Discovered */
+            discovered: {
+                tortilla?: components["schemas"]["Affinity"];
+                paella?: components["schemas"]["Affinity"];
+                pizza?: components["schemas"]["Affinity"];
+                burger?: components["schemas"]["Affinity"];
+                sushi?: components["schemas"]["Affinity"];
+                pasta?: components["schemas"]["Affinity"];
+                tacos?: components["schemas"]["Affinity"];
+                salad?: components["schemas"]["Affinity"];
+                broccoli?: components["schemas"]["Affinity"];
+                strawberries?: components["schemas"]["Affinity"];
+                ice_cream?: components["schemas"]["Affinity"];
+                chocolate?: components["schemas"]["Affinity"];
+                ball?: components["schemas"]["Affinity"];
+                video_games?: components["schemas"]["Affinity"];
+                dance?: components["schemas"]["Affinity"];
+                reading?: components["schemas"]["Affinity"];
+                drawing?: components["schemas"]["Affinity"];
+                puzzle?: components["schemas"]["Affinity"];
+            };
         };
         /**
          * Mood
