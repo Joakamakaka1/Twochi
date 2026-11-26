@@ -584,3 +584,12 @@ def test_a_hooks_git_variables_do_not_reach_a_slots_git(
     monkeypatch.delenv("GIT_DIR")
     assert not slot_2(repo).exists()
     assert not listed(repo)
+
+
+def test_dependencies_are_copies_and_no_links_to_a_shared_store() -> None:
+    # On Windows no link of a loaded .pyd or .node can be deleted: a link would keep a
+    # slot's .venv or node_modules while any other checkout has that module loaded.
+    uv = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert uv["tool"]["uv"]["link-mode"] == "copy"
+    workspace = (ROOT / "pnpm-workspace.yaml").read_text(encoding="utf-8")
+    assert "packageImportMethod: copy" in workspace.splitlines()
