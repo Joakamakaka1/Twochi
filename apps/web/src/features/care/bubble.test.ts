@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { phrases } from "../../shared";
 import type { Affinity, CareAction, CareActionResult, ItemKey, Mood, Need, Pet, Rejection } from "../../shared";
-import { BUBBLE_MS, bubbleKey, celebrating, chooseBubble, tickled } from "./bubble";
+import { BUBBLE_MS, bubbleKey, celebrating, chooseBubble, heard, tickled } from "./bubble";
 import type { BubbleState, LastOutcome } from "./bubble";
 import { needBars } from "./needBars";
 
@@ -197,6 +197,32 @@ describe("the bubble while tickled", () => {
       action: "tickle",
       at: NOW + 100,
     });
+  });
+});
+
+describe("an outcome heard during tickles", () => {
+  const petted = outcome("pet", { deltas: { affection: 15 } }).result;
+
+  it("leaves the giggle when it is a petting the engine applied, «ya vale» included", () => {
+    const enough = outcome("pet", { deltas: { affection: 0 } }).result;
+
+    expect(heard(TICKLE, "pet", petted, NOW + 300)).toBe(TICKLE);
+    expect(heard(TICKLE, "pet", enough, NOW + 300)).toBe(TICKLE);
+  });
+
+  it("is said at once when it is a refusal or a change of health", () => {
+    const refusal = outcome("pet", { applied: false, rejection: "not_caretaker" }).result;
+    const healed = outcome("pet", { deltas: { affection: 15 }, sickness: "healed" }).result;
+    const fellSick = outcome("pet", { deltas: { affection: 15 }, sickness: "fell_sick" }).result;
+
+    for (const result of [refusal, healed, fellSick]) {
+      expect(heard(TICKLE, "pet", result, NOW + 300)).toEqual({ action: "pet", result, at: NOW + 300 });
+    }
+  });
+
+  it("is said as always once the giggle is over, or with no giggle", () => {
+    expect(heard(TICKLE, "pet", petted, NOW + BUBBLE_MS)).toEqual({ action: "pet", result: petted, at: NOW + BUBBLE_MS });
+    expect(heard(null, "pet", petted, NOW)).toEqual({ action: "pet", result: petted, at: NOW });
   });
 });
 

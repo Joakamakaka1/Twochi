@@ -65,6 +65,35 @@ describe("the stage driver", () => {
     expect(scene.played).toEqual(["sad", "happy", "happy", "sad"]);
   });
 
+  it("does not cut a giggle with the answer to a petting, and reacts to it once the giggle is over", () => {
+    const scene = fakeScene();
+    const driver = createStageDriver();
+    driver.attach(scene);
+    driver.rest("idle");
+
+    driver.tickle();
+    vi.advanceTimersByTime(500);
+    driver.react("pet", applied);
+    expect(scene.played).toEqual(["idle", "happy"]);
+    vi.advanceTimersByTime(REACTION_MS - 500);
+    expect(scene.played).toEqual(["idle", "happy", "idle"]);
+
+    driver.react("pet", applied);
+    expect(scene.played).toEqual(["idle", "happy", "idle", "happy"]);
+  });
+
+  it("shows a refusal at once, even during a giggle", () => {
+    const scene = fakeScene();
+    const driver = createStageDriver();
+    driver.attach(scene);
+    driver.rest("idle");
+
+    driver.tickle();
+    driver.react("pet", { ...applied, applied: false, rejection: "not_caretaker" });
+
+    expect(scene.played).toEqual(["idle", "happy", "angry"]);
+  });
+
   it("does not go back to rest once stopped", () => {
     const scene = fakeScene();
     const driver = createStageDriver();
