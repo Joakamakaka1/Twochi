@@ -33,13 +33,15 @@ function pick<T>(list: readonly [T, ...T[]], random: () => number): T {
 
 function outcomePhrase({ action, result }: LastOutcome, random: () => number): string {
   if (result.sickness === "healed") return pick(phrases.healed, random);
-  if (result.sickness === "fell_sick") return pick(phrases.fellSick, random);
   if (result.rejection !== null) return pick(phrases.rejections[result.rejection], random);
+  // What it was given goes before falling sick: the sick look already shows, and the
+  // sick bubble comes once this one is over.
   if (result.reaction !== null) {
     const kind = action === "play" ? "activity" : "food";
     const phrase = pick(phrases.reactions[kind][result.reaction.affinity], random);
     return phrase(texts.care.items[result.reaction.item_key]);
   }
+  if (result.sickness === "fell_sick") return pick(phrases.fellSick, random);
   // The API's deltas say whether the petting raised the affection; the engine decides.
   if (action === "pet" && (result.deltas.affection ?? 0) <= 0) return pick(phrases.enough, random);
   return pick(phrases.applied[action], random);

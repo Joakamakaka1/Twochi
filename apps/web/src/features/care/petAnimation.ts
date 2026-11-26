@@ -34,8 +34,9 @@ export function reactionAnimation(
   // A refusal is a tantrum, except asleep: it grumbles and goes on sleeping.
   if (!result.applied) return result.pet.asleep ? "sleep" : "angry";
   if (result.sickness === "healed") return "happy";
-  if (result.sickness === "fell_sick") return "sad";
+  // What it was given goes before falling sick; its rest turns sad right after.
   if (result.reaction !== null) return BY_AFFINITY[result.reaction.affinity];
+  if (result.sickness === "fell_sick") return "sad";
   return APPLIED[action];
 }
 
