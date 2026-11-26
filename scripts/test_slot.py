@@ -497,14 +497,14 @@ def leave_leftovers(repo: Path) -> None:
 @pytest.fixture
 def windows_git(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """Real git, except `git worktree remove`, which fails as on Windows with a file
-    held open: the worktree is no longer listed and its folder stays. Supabase is
-    not run. Returns the commands that ran, by name."""
+    held open: the worktree is no longer listed and its folder stays. Supabase, uv,
+    pnpm and `git fetch` are not run. Returns the commands that ran, by name."""
     ran: list[list[str]] = []
 
     def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         named = [Path(args[0]).stem, *args[1:]]
         ran.append(named)
-        if named[0] == "supabase":
+        if named[0] in {"supabase", "uv", "pnpm"} or named[1:2] == ["fetch"]:
             return subprocess.CompletedProcess(args, 0)
         if named[1:3] == ["worktree", "remove"]:
             cwd = cast(Path, kwargs["cwd"])
@@ -513,6 +513,8 @@ def windows_git(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
         return RUN(args, **kwargs)  # type: ignore[call-overload]
 
     monkeypatch.setattr(subprocess, "run", run)
+    # The faked tools need not be installed.
+    monkeypatch.setattr(shutil, "which", lambda name: name)
     return ran
 
 
@@ -621,3 +623,17 @@ def test_leftovers_that_kept_a_git_file_to_a_dropped_worktree_are_removed(
     assert main(["down", "2"], checkout=repo) == 0
 
     assert not slot_2(repo).exists()
+
+
+def test_a_hooks_git_variables_do_not_reach_the_branch_lookup_of_slot_up(
+    repo: Path, windows_git: list[list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pointed at another repository, the lookup misses the branch and tries to make it.
+    git(repo, "branch", "two-3-y")
+    monkeypatch.setenv("GIT_DIR", str(repo.parent / "elsewhere" / ".git"))
+
+    assert main(["up", "3", "two-3-y"], checkout=repo) == 0
+
+    monkeypatch.delenv("GIT_DIR")
+    folder = repo / ".claude" / "worktrees" / "slot-3"
+    assert git(folder, "branch", "--show-current").strip() == "two-3-y"
