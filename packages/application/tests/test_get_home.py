@@ -1,5 +1,7 @@
 """`get_home` against local Supabase with real RLS; the clock is the only double."""
 
+import json
+import logging
 from collections.abc import AsyncIterator, Mapping
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -12,6 +14,7 @@ from twochi_application.home import get_home
 from twochi_application.tastes import RateTaste, rate_taste
 from twochi_application.testing import FixedClock
 from twochi_data.database import PostgresDatabase
+from twochi_data.sql import int_at
 from twochi_domain.care import CareAction
 from twochi_domain.catalog import ActivityKey, Affinity, FoodKey, ItemKey
 from twochi_domain.ids import UserId
@@ -118,7 +121,12 @@ async def alice_rates(
 
 
 async def bruno_gives(
-    db: PostgresDatabase, couple: TestCouple, action: CareAction, item: ItemKey
+    db: PostgresDatabase,
+    couple: TestCouple,
+    action: CareAction,
+    item: ItemKey,
+    *,
+    at: datetime = T0,
 ) -> None:
     """Bruno, the caretaker, gives an item to the pet that represents Alice."""
     command = ApplyCareAction(
@@ -128,7 +136,26 @@ async def bruno_gives(
         idempotency_key=str(uuid4()),
         item_key=item,
     )
-    await apply_care_action(command, db=db, clock=FixedClock(T0))
+    await apply_care_action(command, db=db, clock=FixedClock(at))
+
+
+async def record_event(
+    couples: Couples, couple: TestCouple, action: str, payload: dict[str, object]
+) -> int:
+    """An event on Alice's pet written straight as the admin, as no use case would."""
+    rows = await couples.admin.fetch(
+        "insert into app.pet_events (couple_id, pet_id, actor_user_id, source, action,"
+        " payload, rules_version, idempotency_key, created_at)"
+        " values ($1, $2, $3, 'ui', $4, $5::jsonb, 'old', $6, $7) returning id",
+        couple.id,
+        couple.pet_of_alice.id,
+        couple.bruno,
+        action,
+        json.dumps(payload),
+        str(uuid4()),
+        T0,
+    )
+    return int_at(rows[0], "id")
 
 
 async def discovered_by(
@@ -174,8 +201,10 @@ async def test_a_changed_taste_shows_only_once_it_is_given_again(
 
     await alice_rates(db, couple, FoodKey.SUSHI, Affinity.HATES)
     seen_before = await discovered_by(db, couple, couple.bruno)
-    # At the same moment, as the clock is fixed: the one given last is what counts.
-    await bruno_gives(db, couple, CareAction.FEED, FoodKey.SUSHI)
+    # With a clock that went back: the one given last counts, not the latest moment.
+    await bruno_gives(
+        db, couple, CareAction.FEED, FoodKey.SUSHI, at=T0 - timedelta(seconds=1)
+    )
 
     assert seen_before == {FoodKey.SUSHI: Affinity.LOVES}
     assert await discovered_by(db, couple, couple.bruno) == {
@@ -213,18 +242,45 @@ async def test_an_item_the_catalogue_no_longer_holds_is_ignored(
 ) -> None:
     couple = await couples.create(updated_at=T0)
     await bruno_gives(db, couple, CareAction.FEED, FoodKey.PASTA)
-    await couples.admin.execute(
-        "insert into app.pet_events (couple_id, pet_id, actor_user_id, source, action,"
-        " payload, rules_version, idempotency_key, created_at)"
-        " values ($1, $2, $3, 'ui', 'feed', $4::jsonb, 'old', $5, $6)",
-        couple.id,
-        couple.pet_of_alice.id,
-        couple.bruno,
-        '{"item_key": "caviar", "affinity": 2, "effective": true}',
-        str(uuid4()),
-        T0,
-    )
+    await record_event(couples, couple, "feed", {"item_key": "caviar", "affinity": 2})
 
     assert await discovered_by(db, couple, couple.bruno) == {
         FoodKey.PASTA: Affinity.NEUTRAL
     }
+
+
+async def test_only_feeding_and_playing_discover_a_taste(
+    couples: Couples, db: PostgresDatabase
+) -> None:
+    couple = await couples.create(updated_at=T0)
+    # Another kind of event that names an item, as a quiz or the chat might.
+    await record_event(couples, couple, "quiz", {"item_key": "tacos", "affinity": 2})
+
+    assert await discovered_by(db, couple, couple.bruno) == {}
+
+
+async def test_an_event_with_a_broken_reaction_is_skipped_not_a_failure(
+    couples: Couples, db: PostgresDatabase, caplog: pytest.LogCaptureFixture
+) -> None:
+    couple = await couples.create(updated_at=T0)
+    await bruno_gives(db, couple, CareAction.FEED, FoodKey.PASTA)
+    broken = await record_event(
+        couples, couple, "feed", {"item_key": "pizza", "affinity": 7}
+    )
+    # Only the item and its affinity matter here; an odd sickness does not.
+    await record_event(
+        couples,
+        couple,
+        "feed",
+        {"item_key": "salad", "affinity": 1, "sickness": "sneezing"},
+    )
+
+    with caplog.at_level(logging.WARNING):
+        discovered = await discovered_by(db, couple, couple.bruno)
+
+    assert discovered == {
+        FoodKey.PASTA: Affinity.NEUTRAL,
+        FoodKey.SALAD: Affinity.LIKES,
+    }
+    assert str(broken) in caplog.text
+    assert "affinity" not in caplog.text
