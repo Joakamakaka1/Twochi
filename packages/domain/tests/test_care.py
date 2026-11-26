@@ -6,8 +6,19 @@ from uuid import UUID
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
+from twochi_domain.catalog import CATALOG, Affinity, InvalidItemError, ItemKey, ItemKind
 
-from twochi_domain.care import Applied, CareAction, Rejected, Rejection, apply_care
+from twochi_domain.care import (
+    RULES_VERSION,
+    Applied,
+    CareAction,
+    Reaction,
+    Rejected,
+    Rejection,
+    SicknessChange,
+    apply_care,
+    checked_item,
+)
 from twochi_domain.ids import CoupleId, PetId, UserId
 from twochi_domain.needs import Need, NeedState
 from twochi_domain.pet import Pet, read_pet
@@ -15,6 +26,10 @@ from twochi_domain.pet import Pet, read_pet
 T0 = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
 ALICE = UserId(UUID("00000000-0000-4000-8000-00000000000a"))
 BRUNO = UserId(UUID("00000000-0000-4000-8000-00000000000b"))
+
+
+# What each test gives when the action needs an item: a food or an activity.
+ITEM = {CareAction.FEED: ItemKey.PIZZA, CareAction.PLAY: ItemKey.BALL}
 
 
 def hours(n: float) -> timedelta:
@@ -50,6 +65,7 @@ def test_feeding_adds_thirty_to_hunger() -> None:
     outcome = apply_care(
         pet(values={Need.HUNGER: 50}),
         CareAction.FEED,
+        item=ItemKey.PIZZA,
         actor=BRUNO,
         now=T0,
         recent_effective_pets=0,
@@ -64,6 +80,7 @@ def apply(
     subject: Pet,
     action: CareAction,
     *,
+    affinity: Affinity = Affinity.NEUTRAL,
     actor: UserId = BRUNO,
     now: datetime = T0,
     recent_effective_pets: int = 0,
@@ -71,6 +88,8 @@ def apply(
     outcome = apply_care(
         subject,
         action,
+        item=ITEM.get(action),
+        affinity=affinity,
         actor=actor,
         now=now,
         recent_effective_pets=recent_effective_pets,
@@ -160,7 +179,14 @@ def test_waking_keeps_the_hours_slept_at_the_asleep_rates() -> None:
 def rejection_of(
     subject: Pet, action: CareAction, *, actor: UserId = BRUNO
 ) -> Rejection | None:
-    outcome = apply_care(subject, action, actor=actor, now=T0, recent_effective_pets=0)
+    outcome = apply_care(
+        subject,
+        action,
+        item=ITEM.get(action),
+        actor=actor,
+        now=T0,
+        recent_effective_pets=0,
+    )
     return outcome.reason if isinstance(outcome, Rejected) else None
 
 
@@ -197,6 +223,7 @@ def test_tiredness_is_judged_at_now() -> None:
     outcome = apply_care(
         pet(values={Need.ENERGY: 12}),
         CareAction.PLAY,
+        item=ItemKey.BALL,
         actor=BRUNO,
         now=T0 + hours(1),
         recent_effective_pets=0,
@@ -256,6 +283,216 @@ def test_a_sick_pet_stays_sick_while_one_need_is_below_forty() -> None:
     assert outcome.pet.sick_since == T0 - hours(5)
 
 
+def test_falling_sick_is_noted_on_the_action() -> None:
+    outcome = apply(pet(values=dict.fromkeys(Need, 19)), CareAction.FEED)
+
+    assert outcome.sickness is SicknessChange.FELL_SICK
+
+
+def test_healing_is_noted_on_the_action() -> None:
+    values = dict.fromkeys(Need, 40.0) | {Need.HYGIENE: 0.0}
+    outcome = apply(pet(values=values, sick_since=T0 - hours(5)), CareAction.BATHE)
+
+    assert outcome.sickness is SicknessChange.HEALED
+
+
+@pytest.mark.parametrize(
+    ("values", "sick_since"),
+    [
+        (dict.fromkeys(Need, 80.0), None),
+        (dict.fromkeys(Need, 10.0), T0 - hours(5)),
+    ],
+    ids=["stays-healthy", "stays-sick"],
+)
+def test_no_change_of_sickness_notes_nothing(
+    values: dict[Need, float], sick_since: datetime | None
+) -> None:
+    outcome = apply(pet(values=values, sick_since=sick_since), CareAction.FEED)
+
+    assert outcome.sickness is None
+
+
+# Tastes: the catalogue and the affinity of the pet with what it is given.
+
+
+def test_the_catalogue_holds_twelve_foods_and_six_activities() -> None:
+    foods = {key for key, kind in CATALOG.items() if kind is ItemKind.FOOD}
+    activities = {key for key, kind in CATALOG.items() if kind is ItemKind.ACTIVITY}
+
+    assert foods == {
+        "tortilla",
+        "paella",
+        "pizza",
+        "burger",
+        "sushi",
+        "pasta",
+        "tacos",
+        "salad",
+        "broccoli",
+        "strawberries",
+        "ice_cream",
+        "chocolate",
+    }
+    assert activities == {
+        "ball",
+        "video_games",
+        "dance",
+        "reading",
+        "drawing",
+        "puzzle",
+    }
+    assert set(CATALOG) == set(ItemKey)
+
+
+def test_the_rules_version_moved_on_with_the_tastes() -> None:
+    assert RULES_VERSION == "2026-11-26"
+
+
+@pytest.mark.parametrize(
+    ("affinity", "hunger", "affection"),
+    [
+        (Affinity.HATES, 10, None),
+        (Affinity.DISLIKES, 20, None),
+        (Affinity.NEUTRAL, 30, None),
+        (Affinity.LIKES, 35, 5),
+        (Affinity.LOVES, 45, 10),
+    ],
+)
+def test_a_food_raises_hunger_by_how_much_the_pet_likes_it(
+    affinity: Affinity, hunger: float, affection: float | None
+) -> None:
+    outcome = apply(
+        pet(values=dict.fromkeys(Need, 50)), CareAction.FEED, affinity=affinity
+    )
+
+    expected = {Need.HUNGER: hunger}
+    if affection is not None:
+        expected[Need.AFFECTION] = affection
+    assert outcome.deltas == expected
+    assert values_of(outcome.pet)[Need.HUNGER] == 50 + hunger
+    assert outcome.reaction == Reaction(item=ItemKey.PIZZA, affinity=affinity)
+
+
+@pytest.mark.parametrize(
+    ("affinity", "fun", "affection"),
+    [
+        (Affinity.HATES, 5, None),
+        (Affinity.DISLIKES, 15, None),
+        (Affinity.NEUTRAL, 25, None),
+        (Affinity.LIKES, 30, 5),
+        (Affinity.LOVES, 40, 10),
+    ],
+)
+def test_an_activity_raises_fun_by_how_much_the_pet_likes_it(
+    affinity: Affinity, fun: float, affection: float | None
+) -> None:
+    outcome = apply(
+        pet(values=dict.fromkeys(Need, 50)), CareAction.PLAY, affinity=affinity
+    )
+
+    expected = {Need.FUN: fun, Need.ENERGY: -8}
+    if affection is not None:
+        expected[Need.AFFECTION] = affection
+    assert outcome.deltas == expected
+    assert outcome.reaction == Reaction(item=ItemKey.BALL, affinity=affinity)
+
+
+def test_an_item_the_pet_was_never_rated_on_is_neutral() -> None:
+    outcome = apply_care(
+        pet(values={Need.HUNGER: 50}),
+        CareAction.FEED,
+        item=ItemKey.SUSHI,
+        actor=BRUNO,
+        now=T0,
+        recent_effective_pets=0,
+    )
+
+    assert isinstance(outcome, Applied)
+    assert outcome.deltas == {Need.HUNGER: 30}
+    assert outcome.reaction == Reaction(item=ItemKey.SUSHI, affinity=Affinity.NEUTRAL)
+
+
+def test_disgust_is_applied_not_refused() -> None:
+    outcome = apply_care(
+        pet(values={Need.HUNGER: 50}),
+        CareAction.FEED,
+        item=ItemKey.BROCCOLI,
+        affinity=Affinity.HATES,
+        actor=BRUNO,
+        now=T0,
+        recent_effective_pets=0,
+    )
+
+    assert isinstance(outcome, Applied)
+    assert values_of(outcome.pet)[Need.HUNGER] == 60
+
+
+def test_a_favourite_stops_at_one_hundred() -> None:
+    nearly_full = pet(values={Need.HUNGER: 90, Need.AFFECTION: 95})
+
+    outcome = apply(nearly_full, CareAction.FEED, affinity=Affinity.LOVES)
+
+    assert values_of(outcome.pet)[Need.HUNGER] == 100
+    assert values_of(outcome.pet)[Need.AFFECTION] == 100
+    assert outcome.deltas == {Need.HUNGER: 10, Need.AFFECTION: 5}
+
+
+@pytest.mark.parametrize("action", [CareAction.PET, CareAction.BATHE, CareAction.SLEEP])
+def test_actions_without_an_item_have_no_reaction(action: CareAction) -> None:
+    assert apply(pet(), action).reaction is None
+
+
+@pytest.mark.parametrize(
+    ("action", "item"),
+    [
+        (CareAction.FEED, None),
+        (CareAction.FEED, ItemKey.BALL),
+        (CareAction.PLAY, None),
+        (CareAction.PLAY, ItemKey.PIZZA),
+        (CareAction.PET, ItemKey.PIZZA),
+        (CareAction.WAKE, ItemKey.BALL),
+    ],
+    ids=[
+        "feed-nothing",
+        "feed-an-activity",
+        "play-nothing",
+        "play-a-food",
+        "pet-a-food",
+        "wake-an-activity",
+    ],
+)
+def test_an_item_that_does_not_fit_the_action_is_an_error(
+    action: CareAction, item: ItemKey | None
+) -> None:
+    with pytest.raises(InvalidItemError):
+        apply_care(
+            pet(), action, item=item, actor=BRUNO, now=T0, recent_effective_pets=0
+        )
+
+
+def test_an_item_key_is_checked_against_the_catalogue_and_the_action() -> None:
+    assert checked_item(CareAction.FEED, "ice_cream") is ItemKey.ICE_CREAM
+    assert checked_item(CareAction.PLAY, "puzzle") is ItemKey.PUZZLE
+    assert checked_item(CareAction.BATHE, None) is None
+
+
+@pytest.mark.parametrize(
+    ("action", "key"),
+    [
+        (CareAction.FEED, "caviar"),
+        (CareAction.FEED, "ball"),
+        (CareAction.FEED, None),
+        (CareAction.PET, "pizza"),
+    ],
+    ids=["unknown", "wrong-kind", "missing", "not-wanted"],
+)
+def test_an_item_key_that_does_not_fit_is_an_error(
+    action: CareAction, key: str | None
+) -> None:
+    with pytest.raises(InvalidItemError):
+        checked_item(action, key)
+
+
 need_values = st.fixed_dictionaries(
     {need: st.floats(min_value=0, max_value=100) for need in Need}
 )
@@ -279,6 +516,7 @@ def test_no_action_ever_takes_a_need_out_of_its_range(
     outcome = apply_care(
         pet(values=values, asleep=asleep),
         action,
+        item=ITEM.get(action),
         actor=BRUNO,
         now=T0 + passed,
         recent_effective_pets=recent_effective_pets,
@@ -307,6 +545,7 @@ def test_applying_and_reading_at_the_same_moment_agree(
     outcome = apply_care(
         before,
         action,
+        item=ITEM.get(action),
         actor=BRUNO,
         now=now,
         recent_effective_pets=recent_effective_pets,
