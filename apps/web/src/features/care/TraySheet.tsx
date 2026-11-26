@@ -9,7 +9,7 @@ import styles from "./TraySheet.module.css";
 
 interface TraySheetProps {
   action: TrayAction;
-  /** What the carer saw the last time they gave each item. */
+  /** What the caretaker saw the last time they gave each item. */
   discovered: Discovered;
   /** The button that opened the sheet: focus goes back to it when the sheet goes. */
   opener: HTMLElement | null;

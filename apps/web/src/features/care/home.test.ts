@@ -184,7 +184,7 @@ describe("homeAfterCare", () => {
   it("replaces what was seen with an item when it is given again", () => {
     const after = homeAfterCare(caring({ pizza: 2 }), gave({ item_key: "pizza", affinity: -1 }));
 
-    expect(after.pet?.discovered).toEqual({ pizza: -1 });
+    expect(after?.pet?.discovered).toEqual({ pizza: -1 });
   });
 
   it("keeps what was discovered when the response brings no reaction", () => {

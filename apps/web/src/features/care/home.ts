@@ -38,10 +38,12 @@ export function homeHeadline(home: Home): string {
 
 /**
  * Casa after a care action, without reading it again: the pet the response brings and,
- * when it gave an item, that item discovered with the reaction seen now.
+ * when it gave an item, that item discovered with the reaction seen now. Without a Casa
+ * in the cache there is nothing to update, and the cache stays as it is.
  */
-export function homeAfterCare(home: Home | undefined, result: CareActionResult): Home {
-  const discovered = home?.pet?.discovered ?? {};
+export function homeAfterCare(home: Home | undefined, result: CareActionResult): Home | undefined {
+  if (home === undefined) return undefined;
+  const discovered = home.pet?.discovered ?? {};
   const { reaction } = result;
   return {
     pet: {

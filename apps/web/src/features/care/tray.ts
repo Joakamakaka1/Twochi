@@ -17,14 +17,14 @@ export interface SeenReaction {
   text: string;
 }
 
-/** One item of a tray, as the carer sees it. */
+/** One item of a tray, as the caretaker sees it. */
 export interface TrayItem {
   key: ItemKey;
   icon: string;
   name: string;
   /** Its accessible name: the item's, with the reaction seen when there is one. */
   label: string;
-  /** Null until the carer gives it for the first time. */
+  /** Null until the caretaker gives it for the first time. */
   seen: SeenReaction | null;
 }
 
@@ -34,7 +34,7 @@ const TRAYS: { feed: readonly FoodKey[]; play: readonly ActivityKey[] } = { feed
 
 /**
  * The tray of a care action: the foods when feeding, the activities when playing. Each
- * item the carer already gave shows the face of the last reaction seen, never the pet's
+ * item the caretaker already gave shows the face of the last reaction seen, never the pet's
  * taste as it is now (GLOSSARY.md, «Gusto descubierto»).
  */
 export function trayFor(action: TrayAction, discovered: Discovered): TrayItem[] {
