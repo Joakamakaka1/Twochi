@@ -2,8 +2,6 @@ import { Canvas } from "@react-three/fiber";
 import { memo, useImperativeHandle, useRef } from "react";
 import type { Ref } from "react";
 
-import { BACKDROPS } from "./backdrops";
-import type { Backdrop } from "./backdrops";
 import type { Animation, Playing } from "./clips";
 import { PlaceholderPet } from "./PlaceholderPet";
 
@@ -14,7 +12,6 @@ export interface PetSceneHandle {
 
 interface PetSceneProps {
   ref?: Ref<PetSceneHandle>;
-  backdrop: Backdrop;
   /** What a screen reader says the figure is. */
   label: string;
   /** Touching the figure; the same care has its own button outside the canvas. */
@@ -28,11 +25,11 @@ const LOOK_AT = [0, 0.6, 0] as const;
 // The single Canvas of the app. R3F disposes what it builds here (geometries, materials,
 // the renderer) when it unmounts, so nothing is freed by hand.
 //
-// Seams: a rigged GLB replaces PlaceholderPet reading the same `playing` ref (useGLTF and
-// useAnimations, cross-fading to actions[animation]); the room's real background replaces
-// RoomBackdrop.
+// The Canvas is transparent and draws no room: whatever the page puts behind it (a room's
+// backdrop) shows through. Seam: a rigged GLB replaces PlaceholderPet reading the same
+// `playing` ref (useGLTF and useAnimations, cross-fading to actions[animation]).
 // Memoised: Casa re-renders every second for the need bars, and the scene needs none of it.
-export const PetScene = memo(function PetScene({ ref, backdrop, label, onTap }: PetSceneProps) {
+export const PetScene = memo(function PetScene({ ref, label, onTap }: PetSceneProps) {
   const playing = useRef<Playing>({ animation: "idle", startedAt: 0 });
   useImperativeHandle(
     ref,
@@ -47,31 +44,30 @@ export const PetScene = memo(function PetScene({ ref, backdrop, label, onTap }: 
   return (
     <div role="img" aria-label={label} style={{ height: "100%", touchAction: "manipulation" }}>
       <Canvas
-        gl={{ antialias: false }}
+        gl={{ antialias: false, alpha: true }}
         dpr={[1, MAX_DPR]}
         camera={{ position: [0, 1.3, 3.6], fov: 40 }}
-        onCreated={({ camera }) => {
+        style={{ background: "transparent" }}
+        onCreated={({ camera, gl }) => {
           camera.lookAt(...LOOK_AT);
+          gl.setClearColor(0x000000, 0);
         }}
       >
-        <RoomBackdrop backdrop={backdrop} />
         <ambientLight intensity={1.2} />
         <directionalLight position={[2, 4, 3]} intensity={2} />
+        <GroundShadow />
         <PlaceholderPet playing={playing} onTap={onTap} />
       </Canvas>
     </div>
   );
 });
 
-function RoomBackdrop({ backdrop }: { backdrop: Backdrop }) {
-  const { wall, floor } = BACKDROPS[backdrop];
+// A soft shadow under the pet, so it stands on whatever floor the backdrop draws.
+function GroundShadow() {
   return (
-    <>
-      <color attach="background" args={[wall]} />
-      <mesh rotation-x={-Math.PI / 2}>
-        <circleGeometry args={[2.5, 48]} />
-        <meshStandardMaterial color={floor} />
-      </mesh>
-    </>
+    <mesh rotation-x={-Math.PI / 2} position-y={0.001} scale={[1, 0.85, 1]}>
+      <circleGeometry args={[0.62, 40]} />
+      <meshBasicMaterial color="#47355e" transparent opacity={0.18} depthWrite={false} />
+    </mesh>
   );
 }

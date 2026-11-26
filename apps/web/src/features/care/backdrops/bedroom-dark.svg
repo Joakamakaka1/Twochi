@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500">
+  <!-- Placeholder bedroom with the light off, while the pet sleeps: bedroom.svg by night. The real art replaces both in roomBackdrop.ts. -->
+  <defs>
+    <pattern id="dots" width="44" height="44" patternUnits="userSpaceOnUse">
+      <rect width="44" height="44" fill="#3d3566"/>
+      <circle cx="11" cy="11" r="3" fill="#4a4178"/>
+      <circle cx="33" cy="33" r="3" fill="#4a4178"/>
+    </pattern>
+  </defs>
+  <rect width="600" height="310" fill="url(#dots)"/>
+  <rect y="310" width="600" height="190" fill="#2f2852"/>
+  <rect y="300" width="600" height="14" fill="#282247"/>
+  <!-- Window by night -->
+  <rect x="380" y="40" width="150" height="120" rx="16" fill="#1f1b45" stroke="#5a5088" stroke-width="10"/>
+  <path d="M455 40v120M380 100h150" stroke="#5a5088" stroke-width="8"/>
+  <path d="M432 62a18 18 0 1 0 14 30a14 14 0 1 1-14-30z" fill="#fff6c8"/>
+  <g fill="#fff6c8">
+    <circle cx="486" cy="64" r="3"/>
+    <circle cx="510" cy="84" r="2"/>
+    <circle cx="404" cy="132" r="2"/>
+    <circle cx="496" cy="136" r="3"/>
+  </g>
+  <path d="M370 34h170" stroke="#6b4f7e" stroke-width="10" stroke-linecap="round"/>
+  <path d="M376 38c0 50 8 100 20 130h-24z" fill="#5e4a78"/>
+  <path d="M534 38c0 50-8 100-20 130h24z" fill="#5e4a78"/>
+  <!-- Moonlight on the floor -->
+  <path d="M380 160h150l50 250H330z" fill="#8f86c4" opacity="0.12"/>
+  <!-- Rug -->
+  <ellipse cx="300" cy="410" rx="200" ry="50" fill="#4a3d68"/>
+  <!-- Bed -->
+  <rect x="0" y="150" width="34" height="210" rx="14" fill="#4a3a48"/>
+  <rect x="0" y="236" width="220" height="74" rx="18" fill="#6e6894"/>
+  <path d="M0 250h200c14 0 22 10 22 22v60c0 14-10 22-22 22H0z" fill="#4f4386"/>
+  <path d="M60 262h150" stroke="#5f5398" stroke-width="8" stroke-linecap="round"/>
+  <rect x="40" y="206" width="90" height="44" rx="20" fill="#77719c" stroke="#5f5a85" stroke-width="4"/>
+  <rect x="200" y="300" width="20" height="60" rx="8" fill="#4a3a48"/>
+  <!-- Nightstand and the lamp, off -->
+  <rect x="470" y="250" width="100" height="96" rx="14" fill="#5a4c62"/>
+  <path d="M480 298h80" stroke="#4a3e52" stroke-width="4"/>
+  <circle cx="520" cy="320" r="5" fill="#3a3042"/>
+  <rect x="514" y="200" width="12" height="50" rx="6" fill="#4a3a48"/>
+  <path d="M484 206h72l-14-46h-44z" fill="#6e6894" stroke="#5f5a85" stroke-width="4"/>
+  <!-- Zzz -->
+  <path d="M120 130h22l-22 24h22M154 102h16l-16 18h16" fill="none" stroke="#c9b6f5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
+</svg>

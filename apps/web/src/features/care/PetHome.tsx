@@ -3,6 +3,7 @@ import { lazy, Suspense, useCallback, useState } from "react";
 import { texts } from "../../shared";
 import type { Pet } from "../../shared";
 import { needBars } from "./needBars";
+import { roomBackdrop } from "./roomBackdrop";
 import { ROOMS } from "./rooms";
 import type { Room } from "./rooms";
 import { opensTray, trayFor } from "./tray";
@@ -39,9 +40,16 @@ export function PetHome({ pet }: { pet: Pet }) {
         {texts.care.moodIs(texts.care.moods[pet.mood])} · {pet.asleep ? texts.care.asleep : texts.care.awake}
       </p>
 
-      <div style={{ height: SCENE_HEIGHT }}>
+      <div
+        style={{
+          height: SCENE_HEIGHT,
+          backgroundImage: `url("${roomBackdrop(room, pet)}")`,
+          backgroundSize: "cover",
+          backgroundPosition: "center bottom",
+        }}
+      >
         <Suspense fallback={null}>
-          <PetScene ref={attach} backdrop={room} label={texts.care.petFigure(pet.name)} onTap={petByTouch} />
+          <PetScene ref={attach} label={texts.care.petFigure(pet.name)} onTap={petByTouch} />
         </Suspense>
       </div>
 
