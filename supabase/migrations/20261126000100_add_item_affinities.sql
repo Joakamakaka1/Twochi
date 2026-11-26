@@ -66,9 +66,26 @@ grant insert (couple_id, pet_id, item_key, affinity, updated_at)
   on app.item_affinities to authenticated;
 grant update (affinity, updated_at) on app.item_affinities to authenticated;
 
--- The tastes move RULES_VERSION on (twochi_domain.care), and births record it in their
--- event: the same function as in 20261122000500, with only the version changed.
--- `create or replace` keeps its owner, its grants and its trigger.
+-- The version of the game's rules that births record in their event: the engine's
+-- RULES_VERSION (twochi_domain.care), which test_signups.py keeps in step. A later bump
+-- replaces only this function. Plain SQL, not security definer: nobody but the birth,
+-- which runs as its owner, needs to call it.
+create function app.rules_version()
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select '2026-11-26'::text
+$$;
+
+revoke all on function app.rules_version() from public;
+revoke all on function app.rules_version() from anon, authenticated;
+
+-- The tastes move RULES_VERSION on, so births read it from app.rules_version() from now
+-- on: the same function as in 20261122000500, with only that call instead of the
+-- literal. `create or replace` keeps its owner, its grants, its search_path and its
+-- trigger.
 create or replace function app.handle_signup()
 returns trigger
 language plpgsql
@@ -147,7 +164,7 @@ begin
       )
     insert into app.pet_events
       (couple_id, pet_id, source, action, rules_version, idempotency_key)
-    select listed.couple_id, pets.id, 'system', 'birth', '2026-11-26', 'birth'
+    select listed.couple_id, pets.id, 'system', 'birth', app.rules_version(), 'birth'
     from pets;
   end if;
 
