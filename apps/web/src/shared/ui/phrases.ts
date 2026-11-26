@@ -66,7 +66,7 @@ export const phrases = {
     too_tired: ["No tengo fuerzas para jugar…", "Uf… estoy sin energía para jugar.", "Necesito dormir antes de jugar…"],
   } satisfies Record<string, Phrases>,
   // Touched or petted while asleep: it grumbles and goes on sleeping.
-  grumble: ["Mmm… ¿quién me toca? Zzz…", "Grrr… déjame dormir… zzz.", "Cinco minutitos más… zzz."],
+  grumble: ["Mmm… ¿quién me toca? Zzz…", "Grrr… déjame dormir… zzz.", "Zzz… ahora no… zzz."],
   // Many touches in a row (GLOSSARY.md, «Cosquillas»).
   tickles: ["¡Jajaja! ¡Cosquillas no!", "¡Ji, ji, ji! ¡Para, para!", "¡Jajaja! ¡Que me haces cosquillas!"],
   // A petting that raised no affection: enough for now.
