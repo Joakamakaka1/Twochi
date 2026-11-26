@@ -1,8 +1,9 @@
 import { Canvas } from "@react-three/fiber";
-import { memo, useImperativeHandle, useRef } from "react";
+import { memo, useImperativeHandle, useRef, useState } from "react";
 import type { Ref } from "react";
 
 import type { Animation, Playing } from "./clips";
+import styles from "./PetScene.module.css";
 import { PlaceholderPet } from "./PlaceholderPet";
 
 /** The scene's only entry: play a clip on the pet, from its start. */
@@ -42,12 +43,11 @@ export const PetScene = memo(function PetScene({ ref, label, onTap }: PetScenePr
   );
 
   return (
-    <div role="img" aria-label={label} style={{ height: "100%", touchAction: "manipulation" }}>
+    <div role="img" aria-label={label} className={styles.figure}>
       <Canvas
         gl={{ antialias: false, alpha: true }}
         dpr={[1, MAX_DPR]}
         camera={{ position: [0, 1.3, 3.6], fov: 40 }}
-        style={{ background: "transparent" }}
         onCreated={({ camera, gl }) => {
           camera.lookAt(...LOOK_AT);
           gl.setClearColor(0x000000, 0);
@@ -62,12 +62,19 @@ export const PetScene = memo(function PetScene({ ref, label, onTap }: PetScenePr
   );
 });
 
-// A soft shadow under the pet, so it stands on whatever floor the backdrop draws.
+// The value of a CSS token (tokens.css), as WebGL needs it: it cannot read var().
+function tokenValue(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// A soft shadow under the pet, so it stands on whatever floor the backdrop draws. Tinted
+// with the ink token, read once; black only if the tokens never loaded.
 function GroundShadow() {
+  const [ink] = useState(() => tokenValue("--color-ink") || "black");
   return (
     <mesh rotation-x={-Math.PI / 2} position-y={0.001} scale={[1, 0.85, 1]}>
       <circleGeometry args={[0.62, 40]} />
-      <meshBasicMaterial color="#47355e" transparent opacity={0.18} depthWrite={false} />
+      <meshBasicMaterial color={ink} transparent opacity={0.18} depthWrite={false} />
     </mesh>
   );
 }
