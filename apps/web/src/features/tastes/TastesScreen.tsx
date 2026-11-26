@@ -3,6 +3,9 @@ import { FACES, tasteSections, tastesNotice } from "./tastes";
 import styles from "./TastesScreen.module.css";
 import { useRateTaste, useTastes } from "./useTastes";
 
+// Why the faces are off until the pet is born, read with each of them.
+const NOTICE_ID = "tastes-notice";
+
 // «Tus gustos»: the catalogue by kind, five faces per item. Each tap saves at once.
 export function TastesScreen() {
   const tastes = useTastes();
@@ -25,7 +28,11 @@ export function TastesScreen() {
     <div className={styles.screen}>
       <h1>{texts.tastes.title}</h1>
       <p className={styles.intro}>{texts.tastes.intro}</p>
-      {notice !== null && <p className={styles.notice}>{notice}</p>}
+      {notice !== null && (
+        <p id={NOTICE_ID} className={styles.notice}>
+          {notice}
+        </p>
+      )}
       {rating.failed && <p role="alert">{texts.failure}</p>}
 
       {tasteSections(tastes.data.tastes).map((section) => (
@@ -52,6 +59,7 @@ export function TastesScreen() {
                       title={face.label}
                       // Without a pet yet there is nothing to save: the list shows as it will be.
                       disabled={notice !== null}
+                      aria-describedby={notice === null ? undefined : NOTICE_ID}
                       onClick={() => {
                         if (face.affinity !== item.affinity) rating.rate({ item_key: item.key, affinity: face.affinity });
                       }}
