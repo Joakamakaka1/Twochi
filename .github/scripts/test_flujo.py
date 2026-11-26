@@ -1,4 +1,5 @@
 import json
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -178,6 +179,7 @@ def test_size_word_inside_another_word_does_not_count() -> None:
         pr("feat(domain): add bonus (TWO-42)", body=body_with("Anormalmente grande."))
     )
     assert len(errors) == 1
+    assert "trivial, normal, complejo o delicado" in errors[0]
 
 
 @pytest.mark.parametrize("size", ["Normal: un cambio pequeño.", "trivial"])
@@ -201,6 +203,7 @@ def test_first_size_named_is_the_declared_one() -> None:
     body = body_with("Normal, aunque roce algo delicado.")
     errors = check(pr("ci: tweak (TWO-2)", body=body, changed=("justfile",)))
     assert len(errors) == 1
+    assert "delicado, not normal" in errors[0]
 
 
 def test_trivial_pr_without_id_needs_no_size_or_review() -> None:
@@ -244,6 +247,8 @@ def test_missing_size_still_asks_for_review() -> None:
 def test_pr24_body_as_it_was_fails_for_missing_size_and_review() -> None:
     errors = check(pr(PR24_TITLE, body=PR24_BODY, changed=PR24_FILES))
     assert len(errors) == 2
+    assert "«Tamaño»" in errors[0]
+    assert "«Revisión»" in errors[1]
 
 
 def test_pr24_body_with_the_new_sections_passes() -> None:
@@ -308,6 +313,7 @@ def test_code_with_a_test_does_not_warn(test_path: str) -> None:
         "apps/web/package.json",
         "apps/web/src/styles.css",
         "apps/web/vite.config.ts",
+        "packages/api-client/src/schema.gen.ts",
         ".github/scripts/flujo.py",
     ],
 )
@@ -396,3 +402,98 @@ def test_load_reads_nul_separated_names(tmp_path: Path) -> None:
 
     assert loaded.changed_files == ("infra/ñ.tf", "docs/a b.md")
     assert loaded.body == ""
+
+
+# Review fixes: subheadings, headings that carry their content, fences, escaping.
+
+
+def test_section_holding_only_subheadings_has_content() -> None:
+    body = body_with("Delicado.", review="### Corrección\n\nSin hallazgos.")
+    assert check(pr("ci: tweak (TWO-2)", body=body, changed=("justfile",))) == []
+
+
+def test_section_ends_at_a_heading_of_its_own_level() -> None:
+    body = body_with("Delicado.", review="").replace(
+        "## Revisión\n\n\n\n", "## Revisión\n\n## Notas\n\nTexto ajeno.\n\n"
+    )
+    errors = check(pr("ci: tweak (TWO-2)", body=body, changed=("justfile",)))
+    assert len(errors) == 1
+    assert "«Revisión»" in errors[0]
+
+
+def test_subheading_of_a_higher_level_closes_the_section() -> None:
+    body = "### Tamaño\n\n## Otra cosa\n\nDelicado.\n"
+    errors = check(pr("docs: x (TWO-42)", body=body))
+    assert any("«Tamaño» section with content" in error for error in errors)
+
+
+@pytest.mark.parametrize(
+    "heading", ["## Tamaño: delicado", "## Tamaño: Delicado, toca el CI"]
+)
+def test_size_written_in_the_heading_counts(heading: str) -> None:
+    body = body_with("x").replace("## Tamaño\n\nx", heading)
+    assert check(pr("ci: tweak (TWO-2)", body=body, changed=("justfile",))) == []
+
+
+def test_heading_with_a_trailing_colon_is_the_section() -> None:
+    body = body_with("Delicado.").replace("## Tamaño\n", "## Tamaño:\n")
+    assert check(pr("ci: tweak (TWO-2)", body=body, changed=("justfile",))) == []
+
+
+def test_section_names_without_accents_count() -> None:
+    body = (
+        "## Tamano\n\nDelicado.\n\n## Evidencia\n\nok\n\n"
+        "## Revision\n\nUno.\n\n## Peligro de fusion\n\nok\n"
+    )
+    assert check(pr("ci: tweak (TWO-2)", body=body, changed=("justfile",))) == []
+
+
+def test_decomposed_accents_are_normalized() -> None:
+    body = unicodedata.normalize("NFD", COMPLETE_BODY)
+    assert check(pr("ci: tweak (TWO-2)", body=body, changed=("justfile",))) == []
+
+
+@pytest.mark.parametrize("fence", ["```", "~~~"])
+def test_headings_inside_a_fenced_block_do_not_count(fence: str) -> None:
+    body = (
+        f"## Qué cambia\n\n{fence}md\n## Tamaño\n\nDelicado.\n\n"
+        f"## Revisión\n\nUno.\n{fence}\n"
+    )
+    errors = check(pr("docs: x (TWO-42)", body=body))
+    assert any("«Tamaño»" in error for error in errors)
+    assert any("«Revisión»" in error for error in errors)
+
+
+def test_a_fenced_block_is_content_of_its_section() -> None:
+    body = body_with("Delicado.").replace(
+        "## Evidencia\n\nok", "## Evidencia\n\n```\n32 failed\n```"
+    )
+    assert check(pr("ci: tweak (TWO-2)", body=body, changed=("justfile",))) == []
+
+
+def test_main_escapes_workflow_commands_in_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    changed = write_event(
+        tmp_path,
+        title="ci: tweak (TWO-2)",
+        body="",
+        changed=(
+            "apps/x\n::error title=spoof::y.py\0"
+            "infra/a\r\n::warning title=spoof::100%.tf\0"
+        ),
+    )
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(tmp_path / "event.json"))
+
+    assert main(["flujo.py", str(changed)]) == 1
+
+    commands = [
+        line for line in capsys.readouterr().out.splitlines() if line.startswith("::")
+    ]
+    assert commands
+    assert all(
+        line.startswith(("::warning title=flujo::", "::error title=flujo::"))
+        for line in commands
+    )
+    assert any("%0A::error title=spoof::" in line for line in commands)
+    assert any("%0D%0A::warning title=spoof::100%25.tf" in line for line in commands)
