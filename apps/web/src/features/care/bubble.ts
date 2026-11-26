@@ -25,6 +25,15 @@ export function currentOutcome(last: LastOutcome | null, now: number): LastOutco
   return last !== null && now < last.at + BUBBLE_MS ? last : null;
 }
 
+/**
+ * Names what the bubble says: each outcome its own, so the same phrase after a second
+ * outcome is said again; the state's once the outcome is over.
+ */
+export function bubbleKey(last: LastOutcome | null, now: number): string {
+  const outcome = currentOutcome(last, now);
+  return outcome === null ? "state" : `outcome:${String(outcome.at)}`;
+}
+
 // One of several phrases; `random` is in [0, 1), as Math.random.
 function pick<T>(list: readonly [T, ...T[]], random: () => number): T {
   const index = Math.min(Math.floor(random() * list.length), list.length - 1);

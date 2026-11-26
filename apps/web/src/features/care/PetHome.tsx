@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 
 import { texts } from "../../shared";
 import type { CareAction, CareActionResult, Pet } from "../../shared";
-import { chooseBubble, currentOutcome } from "./bubble";
+import { bubbleKey, chooseBubble, currentOutcome } from "./bubble";
 import { Celebration } from "./Celebration";
 import { ACTION_ICONS, ROOM_ICONS, SICK_ICON } from "./icons";
 import { needBars } from "./needBars";
@@ -95,7 +95,7 @@ export function PetHome({ pet }: { pet: Pet }) {
         )}
         {/* Keyed by the outcome, so healing twice celebrates twice. */}
         {healing && last !== null && <Celebration key={last.at} />}
-        <PetBubble text={bubble} />
+        <PetBubble text={bubble} id={bubbleKey(last, now.getTime())} />
       </div>
 
       {care.failure !== null && (
