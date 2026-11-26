@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Pet } from "../../shared";
-import { needBars } from "./needBars";
+import { mostUrgent, needBars } from "./needBars";
 
 const READ_AT = "2026-11-22T12:00:00Z";
 
@@ -67,5 +67,32 @@ describe("needBars", () => {
 
     expect(bars.map((bar) => bar.value)).toEqual([25, 80, 80, 80, 80]);
     expect(bars[0]?.asks).toBe(true);
+  });
+});
+
+describe("mostUrgent", () => {
+  const urgentAt = (values: Record<keyof Pet["needs"], number>) => {
+    const still = (value: number): [number, number] => [value, 0];
+    const pet = petWith({
+      hunger: still(values.hunger),
+      energy: still(values.energy),
+      hygiene: still(values.hygiene),
+      fun: still(values.fun),
+      affection: still(values.affection),
+    });
+    return mostUrgent(needBars(pet, at(READ_AT)));
+  };
+
+  it("highlights nothing while the pet asks for nothing", () => {
+    expect(urgentAt({ hunger: 30, energy: 80, hygiene: 55, fun: 31, affection: 100 })).toBeNull();
+  });
+
+  it("highlights the need it asks for most: the lowest under 30", () => {
+    expect(urgentAt({ hunger: 25, energy: 80, hygiene: 12, fun: 29, affection: 60 })).toBe("hygiene");
+    expect(urgentAt({ hunger: 80, energy: 80, hygiene: 80, fun: 80, affection: 3 })).toBe("affection");
+  });
+
+  it("breaks a tie by the order the needs are shown in", () => {
+    expect(urgentAt({ hunger: 50, energy: 10, hygiene: 80, fun: 10, affection: 10 })).toBe("energy");
   });
 });
