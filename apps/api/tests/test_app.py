@@ -359,8 +359,8 @@ def care(client: TestClient, auth: str | None, pet_id: object, body: object) -> 
     return client.post(f"/api/pets/{pet_id}/care-actions", json=body, headers=headers)
 
 
-def feed(key: str = "tap-1") -> dict[str, str]:
-    return {"action": "feed", "idempotency_key": key}
+def feed(key: str = "tap-1", item: str = "pizza") -> dict[str, str]:
+    return {"action": "feed", "idempotency_key": key, "item_key": item}
 
 
 @pytest.mark.anyio
@@ -378,6 +378,8 @@ async def test_care_action_applies_and_returns_the_pet(
     assert body["applied"] is True
     assert body["rejection"] is None
     assert body["deltas"] == {"hunger": 30.0}
+    assert body["reaction"] == {"item_key": "pizza", "affinity": 0}
+    assert body["sickness"] is None
     assert body["pet"]["id"] == str(couple.pet_of_alice.id)
     assert body["pet"]["needs"]["hunger"] == {
         "value": 80.0,
@@ -403,6 +405,8 @@ async def test_a_refused_care_action_is_a_200_with_its_reason(
     assert body["applied"] is False
     assert body["rejection"] == "not_caretaker"
     assert body["deltas"] == {}
+    assert body["reaction"] is None
+    assert body["sickness"] is None
     assert body["pet"]["needs"]["hunger"]["value"] == 80.0
 
 
@@ -470,10 +474,100 @@ async def test_a_key_reused_for_another_action_is_a_422_problem(
     couple = await couples.create(updated_at=NOW)
     auth = token_of(couple, couple.bruno)
     pet = couple.pet_of_alice.id
-    care(game, auth, pet, {"action": "feed", "idempotency_key": "reused"})
+    care(game, auth, pet, feed("reused"))
 
     response = care(game, auth, pet, {"action": "bathe", "idempotency_key": "reused"})
 
     assert response.status_code == 422
     assert response.headers["content-type"] == "application/problem+json"
     assert response.json()["code"] == "idempotency_key_reused"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"action": "feed", "idempotency_key": "k", "item_key": "caviar"},
+        {"action": "feed", "idempotency_key": "k", "item_key": "ball"},
+        {"action": "play", "idempotency_key": "k", "item_key": "pizza"},
+        {"action": "feed", "idempotency_key": "k"},
+        {"action": "play", "idempotency_key": "k", "item_key": None},
+        {"action": "bathe", "idempotency_key": "k", "item_key": "pizza"},
+        {"action": "feed", "idempotency_key": "k", "item_key": 7},
+    ],
+    ids=[
+        "unknown",
+        "an-activity-to-eat",
+        "a-food-to-play",
+        "feed-without-item",
+        "play-without-item",
+        "an-item-to-bathe",
+        "not-a-key",
+    ],
+)
+def test_an_item_that_does_not_fit_the_action_is_its_own_422_problem(
+    game: TestClient, body: object
+) -> None:
+    response = care(game, token(), USER_ID, body)
+
+    assert response.status_code == 422
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "invalid_item"
+
+
+@pytest.mark.anyio
+async def test_a_care_action_says_when_the_pet_fell_sick(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create(
+        needs_of_alices_pet=dict.fromkeys(Need, 19), updated_at=NOW
+    )
+
+    response = care(
+        game, token_of(couple, couple.bruno), couple.pet_of_alice.id, feed()
+    )
+
+    assert response.status_code == 200
+    assert response.json()["sickness"] == "fell_sick"
+
+
+def test_the_contract_names_every_item_of_the_catalogue() -> None:
+    verifier = TokenVerifier(
+        issuer=ISSUER, audience=AUDIENCE, signing_key=lambda _token: public_jwk()
+    )
+    app = create_app(verifier, db=PostgresDatabase(None), clock=FixedClock(NOW))
+    schemas: dict[str, Any] = app.openapi()["components"]["schemas"]
+
+    # Foods and activities apart, so the front's trays are typed by their kind.
+    assert schemas["FoodKey"]["enum"] == [
+        "tortilla",
+        "paella",
+        "pizza",
+        "burger",
+        "sushi",
+        "pasta",
+        "tacos",
+        "salad",
+        "broccoli",
+        "strawberries",
+        "ice_cream",
+        "chocolate",
+    ]
+    assert schemas["ActivityKey"]["enum"] == [
+        "ball",
+        "video_games",
+        "dance",
+        "reading",
+        "drawing",
+        "puzzle",
+    ]
+    item_key = (
+        {"$ref": "#/components/schemas/FoodKey"},
+        {"$ref": "#/components/schemas/ActivityKey"},
+    )
+    for where in (schemas["CareActionIn"], schemas["ReactionOut"]):
+        refs = [
+            kind for kind in where["properties"]["item_key"]["anyOf"] if "$ref" in kind
+        ]
+        assert tuple(refs) == item_key
+    assert schemas["Affinity"]["enum"] == [-2, -1, 0, 1, 2]
+    assert schemas["SicknessChange"]["enum"] == ["fell_sick", "healed"]

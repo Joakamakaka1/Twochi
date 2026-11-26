@@ -39,6 +39,6 @@ export function useCareActions(petId: Pet["id"], onOutcome: (action: CareAction,
     retry: taps.retry,
     isPending: mutation.isPending,
     failure: careFailureText(mutation.error),
-    rejection: careOutcomeText(mutation.data),
+    outcome: careOutcomeText(mutation.data),
   };
 }

@@ -10,6 +10,7 @@ from starlette.exceptions import HTTPException
 from twochi_api.auth import AuthUnavailableError, MfaRequiredError, UnauthenticatedError
 from twochi_application.care import IdempotencyKeyReusedError, PetNotFoundError
 from twochi_application.ports import DatabaseUnavailableError
+from twochi_domain.catalog import InvalidItemError
 
 PROBLEM_JSON = "application/problem+json"
 
@@ -49,8 +50,26 @@ async def _idempotency_key_reused(_request: Request, _error: Exception) -> JSONR
     return problem(422, "idempotency_key_reused", "Idempotency key already used")
 
 
-async def _invalid_request(_request: Request, _error: Exception) -> JSONResponse:
+async def _invalid_item(_request: Request, _error: Exception) -> JSONResponse:
+    return _invalid_item_problem()
+
+
+def _invalid_item_problem() -> JSONResponse:
+    # Missing, unknown, of the other kind or given to an action that takes none.
+    return problem(422, "invalid_item", "Item does not fit the action")
+
+
+async def _invalid_request(_request: Request, error: Exception) -> JSONResponse:
+    # An item the catalogue does not know fails the schema's enum before reaching the
+    # use case: it is the same problem as an item the use case refuses.
+    if isinstance(error, RequestValidationError) and _only_item_key(error):
+        return _invalid_item_problem()
     return problem(422, "invalid_request", "Invalid request")
+
+
+def _only_item_key(error: RequestValidationError) -> bool:
+    locations = [tuple(detail.get("loc", ())) for detail in error.errors()]
+    return bool(locations) and all(loc[:2] == ("body", "item_key") for loc in locations)
 
 
 async def _http_error(_request: Request, error: Exception) -> JSONResponse:
@@ -71,6 +90,7 @@ def install(app: FastAPI) -> None:
     app.add_exception_handler(DatabaseUnavailableError, _database_unavailable)
     app.add_exception_handler(PetNotFoundError, _pet_not_found)
     app.add_exception_handler(IdempotencyKeyReusedError, _idempotency_key_reused)
+    app.add_exception_handler(InvalidItemError, _invalid_item)
     app.add_exception_handler(RequestValidationError, _invalid_request)
     app.add_exception_handler(HTTPException, _http_error)
     # Anything else: a problem without details; Starlette still logs the traceback.

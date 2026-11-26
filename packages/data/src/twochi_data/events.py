@@ -3,16 +3,19 @@
 import json
 from collections.abc import Mapping
 from datetime import datetime
+from typing import cast
 
 from twochi_application.ports import CareRecord, StoredCare
 from twochi_data.sql import Connection, Row, int_at, text_at, uuid_at
-from twochi_domain.care import RULES_VERSION, CareAction
+from twochi_domain.care import RULES_VERSION, CareAction, Reaction, SicknessChange
+from twochi_domain.catalog import Affinity, item_key
 from twochi_domain.errors import TwochiError
 from twochi_domain.ids import PetId, UserId
 from twochi_domain.needs import Need
 
 _STORED_CARE = """
-select source, action, actor_user_id, deltas::text as deltas
+select source, action, actor_user_id, deltas::text as deltas,
+       payload::text as payload
 from app.pet_events
 where pet_id = $1 and idempotency_key = $2
 """
@@ -59,13 +62,21 @@ class PostgresPetEventRepository:
     ) -> None:
         """Record an applied care action, from the interface, under its key."""
         pet = care.applied.pet
+        payload: dict[str, object] = {"effective": care.applied.effective}
+        # The item and the affinity seen, for a retry to return the same reaction and
+        # for the tastes the caretaker discovers; the sickness change, for the diary.
+        if care.applied.reaction is not None:
+            payload["item_key"] = care.applied.reaction.item.value
+            payload["affinity"] = care.applied.reaction.affinity.value
+        if care.applied.sickness is not None:
+            payload["sickness"] = care.applied.sickness.value
         await self._connection.execute(
             _RECORD_CARE,
             pet.couple_id,
             pet.id,
             care.actor,
             care.action.value,
-            json.dumps({"effective": care.applied.effective}),
+            json.dumps(payload),
             json.dumps(
                 {need.value: delta for need, delta in care.applied.deltas.items()}
             ),
@@ -79,16 +90,45 @@ class UnexpectedDeltasError(TwochiError):
     """Stored deltas that are not a map of need to number: a schema drift."""
 
 
+class UnexpectedPayloadError(TwochiError):
+    """A stored payload that is not an object, or names an unknown sickness change."""
+
+
 def _to_stored_care(row: Row) -> StoredCare:
     action = text_at(row, "action")
     if text_at(row, "source") != "ui" or action not in CareAction:
         # Not a care action from the interface: its deltas need not be a need map.
         return StoredCare(action=None, actor=None, deltas={})
+    reaction, sickness = _seen(text_at(row, "payload"))
     return StoredCare(
         action=CareAction(action),
         actor=UserId(uuid_at(row, "actor_user_id")),
         deltas=_to_deltas(text_at(row, "deltas")),
+        reaction=reaction,
+        sickness=sickness,
     )
+
+
+def _seen(raw: str) -> tuple[Reaction | None, SicknessChange | None]:
+    # The reaction and the sickness change a care event stored. Events from before the
+    # tastes carry neither; an item the catalogue no longer holds is ignored, as the
+    # tastes ignore it.
+    stored: object = json.loads(raw)
+    if not isinstance(stored, dict):
+        raise UnexpectedPayloadError
+    payload = cast(dict[str, object], stored)
+    item, affinity = payload.get("item_key"), payload.get("affinity")
+    sickness = payload.get("sickness")
+    if sickness is not None and sickness not in SicknessChange:
+        raise UnexpectedPayloadError
+    reaction = None
+    known = item_key(item) if isinstance(item, str) else None
+    if known is not None:
+        # A bool is an int to isinstance; neither it nor a number out of range is one.
+        if type(affinity) is not int or affinity not in Affinity:
+            raise UnexpectedPayloadError
+        reaction = Reaction(item=known, affinity=Affinity(affinity))
+    return reaction, None if sickness is None else SicknessChange(sickness)
 
 
 def _to_deltas(raw: str) -> Mapping[Need, float]:

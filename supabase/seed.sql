@@ -49,3 +49,20 @@ insert into app.pet_needs (pet_id, couple_id, need, value, updated_at)
 select p.id, p.couple_id, n.need, 80, now()
 from app.pets p
 cross join unnest(array['hunger', 'energy', 'hygiene', 'fun', 'affection']) as n (need);
+
+-- Tastes to discover in the browser, as each person would rate the pet that represents
+-- them: at least a favourite and a disgust per pet, among foods and activities.
+insert into app.item_affinities (couple_id, pet_id, item_key, affinity)
+select '00000000-0000-4000-8000-0000000c0de1', t.pet_id, t.item_key, t.affinity
+from (values
+  ('00000000-0000-4000-8000-0000000fa11c'::uuid, 'tortilla', 2),
+  ('00000000-0000-4000-8000-0000000fa11c'::uuid, 'ice_cream', 1),
+  ('00000000-0000-4000-8000-0000000fa11c'::uuid, 'broccoli', -2),
+  ('00000000-0000-4000-8000-0000000fa11c'::uuid, 'dance', 2),
+  ('00000000-0000-4000-8000-0000000fa11c'::uuid, 'reading', -2),
+  ('00000000-0000-4000-8000-0000000fb20b'::uuid, 'sushi', 2),
+  ('00000000-0000-4000-8000-0000000fb20b'::uuid, 'pizza', 1),
+  ('00000000-0000-4000-8000-0000000fb20b'::uuid, 'salad', -2),
+  ('00000000-0000-4000-8000-0000000fb20b'::uuid, 'video_games', 2),
+  ('00000000-0000-4000-8000-0000000fb20b'::uuid, 'ball', -2)
+) as t (pet_id, item_key, affinity);

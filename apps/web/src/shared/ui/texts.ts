@@ -46,6 +46,38 @@ export const texts = {
       sleep: "Dormir",
       wake: "Despertar",
     },
+    // The catalogue (GLOSSARY.md, «Catálogo»): the foods and the activities.
+    items: {
+      tortilla: "Tortilla",
+      paella: "Paella",
+      pizza: "Pizza",
+      burger: "Hamburguesa",
+      sushi: "Sushi",
+      pasta: "Pasta",
+      tacos: "Tacos",
+      salad: "Ensalada",
+      broccoli: "Brócoli",
+      strawberries: "Fresas",
+      ice_cream: "Helado",
+      chocolate: "Chocolate",
+      ball: "Pelota",
+      video_games: "Videojuegos",
+      dance: "Bailar",
+      reading: "Leer",
+      drawing: "Dibujar",
+      puzzle: "Puzle",
+    },
+    trays: { feed: "¿Qué le das de comer?", play: "¿A qué jugáis?" },
+    closeTray: "Cerrar",
+    // How the pet took what it was given, by its affinity (GLOSSARY.md, «Afinidad»).
+    reactions: {
+      "2": "¡le encanta!",
+      "1": "le gusta.",
+      "0": "ni fu ni fa.",
+      "-1": "no le gusta mucho.",
+      "-2": "¡puaj, qué asco! Pero se lo toma.",
+    },
+    reactionTo: (item: string, reaction: string) => `${item}: ${reaction}`,
     // Why the engine refused a care action (GLOSSARY.md, «Rechazo»).
     rejections: {
       not_caretaker: "Esta mascota la cuida tu pareja.",

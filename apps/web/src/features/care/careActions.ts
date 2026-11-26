@@ -2,18 +2,23 @@ import { hashKey, mutationOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { apiError, isAuthFailure, retryApiWrite, texts } from "../../shared";
-import type { ApiClient, CareAction, CareActionResult, Home, Pet } from "../../shared";
+import type { ApiClient, CareAction, CareActionResult, Home, ItemKey, Pet } from "../../shared";
 import { HOME_KEY } from "./home";
 
-/** One tap on a care button: its action and the key that names it on every retry. */
+/**
+ * One tap on a care button: its action, the item chosen in the tray when feeding or
+ * playing, and the key that names it on every retry.
+ */
 export interface CareTap {
   action: CareAction;
   idempotency_key: string;
+  item_key?: ItemKey;
 }
 
 /** A new tap, with a key of its own (a UUID fits the API's `[A-Za-z0-9_-]{1,64}`). */
-export function careTap(action: CareAction): CareTap {
-  return { action, idempotency_key: crypto.randomUUID() };
+export function careTap(action: CareAction, item?: ItemKey): CareTap {
+  const tap = { action, idempotency_key: crypto.randomUUID() };
+  return item === undefined ? tap : { ...tap, item_key: item };
 }
 
 export async function sendCareAction(api: ApiClient, petId: Pet["id"], tap: CareTap): Promise<CareActionResult> {
@@ -61,7 +66,7 @@ export interface CareMutation {
 
 /** Casa's care taps, the button's and the figure's, over the mutation. */
 export interface CareTaps {
-  tap: (action: CareAction) => void;
+  tap: (action: CareAction, item?: ItemKey) => void;
   /** The tap that failed, sent again with its own key. */
   retry: () => void;
   /** Casa was read again from the API (see onHomeRead). */
@@ -89,8 +94,8 @@ export function careTaps(mutation: CareMutation, onOutcome: (action: CareAction,
     });
   };
   return {
-    tap: (action) => {
-      if (!inFlight) send(careTap(action));
+    tap: (action, item) => {
+      if (!inFlight) send(careTap(action, item));
     },
     retry: () => {
       if (!inFlight && last !== undefined) send(last);
@@ -104,10 +109,13 @@ export function careTaps(mutation: CareMutation, onOutcome: (action: CareAction,
   };
 }
 
-/** What Casa says after a tap: why the engine refused it, or nothing. */
+/** What Casa says after a tap: why the engine refused it, how the pet took what it was given, or nothing. */
 export function careOutcomeText(result: CareActionResult | undefined): string | null {
-  if (result?.rejection == null) return null;
-  return texts.care.rejections[result.rejection];
+  if (result === undefined) return null;
+  if (result.rejection !== null) return texts.care.rejections[result.rejection];
+  if (result.reaction === null) return null;
+  const { item_key, affinity } = result.reaction;
+  return texts.care.reactionTo(texts.care.items[item_key], texts.care.reactions[affinity]);
 }
 
 /** What Casa says when a tap failed: nothing after an auth failure, as the gate takes over. */

@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 
 from twochi_application.actors import UserActor
 from twochi_application.ports import DatabaseUnavailableError
+from twochi_data.affinities import PostgresAffinityRepository
 from twochi_data.events import PostgresPetEventRepository
 from twochi_data.pets import PostgresPetRepository
 from twochi_data.sql import (
@@ -33,6 +34,7 @@ class PostgresTransaction:
     def __init__(self, connection: Connection) -> None:
         self._pets = PostgresPetRepository(connection)
         self._events = PostgresPetEventRepository(connection)
+        self._affinities = PostgresAffinityRepository(connection)
 
     @property
     def pets(self) -> PostgresPetRepository:
@@ -41,6 +43,10 @@ class PostgresTransaction:
     @property
     def events(self) -> PostgresPetEventRepository:
         return self._events
+
+    @property
+    def affinities(self) -> PostgresAffinityRepository:
+        return self._affinities
 
 
 class PostgresDatabase:

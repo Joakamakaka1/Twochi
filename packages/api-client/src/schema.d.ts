@@ -77,6 +77,18 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * ActivityKey
+         * @description An activity: played in the living room, it raises fun.
+         * @enum {string}
+         */
+        ActivityKey: "ball" | "video_games" | "dance" | "reading" | "drawing" | "puzzle";
+        /**
+         * Affinity
+         * @description How much a pet likes an item, from -2 to 2; what was never rated is neutral.
+         * @enum {integer}
+         */
+        Affinity: -2 | -1 | 0 | 1 | 2;
+        /**
          * CareAction
          * @description What the caretaker can do to their pet from the interface.
          * @enum {string}
@@ -90,10 +102,15 @@ export interface components {
             action: components["schemas"]["CareAction"];
             /** Idempotency Key */
             idempotency_key: string;
+            /** Item Key */
+            item_key?: components["schemas"]["FoodKey"] | components["schemas"]["ActivityKey"] | null;
         };
         /**
          * CareActionOut
          * @description Applied with its deltas, or refused with its reason; the pet as it is now.
+         *
+         *     `reaction` comes with feeding and playing; `sickness` when the action left the pet
+         *     sick or healed it.
          */
         CareActionOut: {
             /** Applied */
@@ -103,8 +120,16 @@ export interface components {
             deltas: {
                 [key: string]: number;
             };
+            reaction: components["schemas"]["ReactionOut"] | null;
+            sickness: components["schemas"]["SicknessChange"] | null;
             pet: components["schemas"]["PetOut"];
         };
+        /**
+         * FoodKey
+         * @description A food: given in the kitchen, it raises hunger.
+         * @enum {string}
+         */
+        FoodKey: "tortilla" | "paella" | "pizza" | "burger" | "sushi" | "pasta" | "tacos" | "salad" | "broccoli" | "strawberries" | "ice_cream" | "chocolate";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -189,11 +214,26 @@ export interface components {
             nonce: string;
         };
         /**
+         * ReactionOut
+         * @description How the pet took what it was given: the item and its affinity right then.
+         */
+        ReactionOut: {
+            /** Item Key */
+            item_key: components["schemas"]["FoodKey"] | components["schemas"]["ActivityKey"];
+            affinity: components["schemas"]["Affinity"];
+        };
+        /**
          * Rejection
          * @description Why the engine refused a care action; the front animates it.
          * @enum {string}
          */
         Rejection: "not_caretaker" | "asleep" | "already_asleep" | "already_awake" | "too_tired";
+        /**
+         * SicknessChange
+         * @description An action that left the pet sick, or healed it; the event keeps it.
+         * @enum {string}
+         */
+        SicknessChange: "fell_sick" | "healed";
         /** ValidationError */
         ValidationError: {
             /** Location */
