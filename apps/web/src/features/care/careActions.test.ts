@@ -3,7 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, createApi, texts } from "../../shared";
 import type { CareActionResult, Home, Pet } from "../../shared";
-import { careActionMutation, careFailureText, careOutcomeText, careTap, onHomeRead } from "./careActions";
+import {
+  careActionMutation,
+  careFailureText,
+  careOutcomeText,
+  careTap,
+  careTaps,
+  onHomeRead,
+} from "./careActions";
 import { HOME_KEY, homeQuery } from "./home";
 
 const need = (value: number) => ({ value, updated_at: "2026-11-22T12:00:00Z", rate_per_hour: -3 });
@@ -208,5 +215,125 @@ describe("the text of a refusal", () => {
     expect(careOutcomeText(observer.getCurrentResult().data)).toBeNull();
     late.release(Response.json(applied));
     await next;
+  });
+});
+
+// Casa's taps over a care mutation that is on screen (subscribed), as useMutation's is:
+// per-tap callbacks only reach a watched observer.
+function tapsFor(api: ReturnType<typeof createApi>) {
+  const { queryClient, observer } = careFor(api);
+  observer.subscribe(() => undefined);
+  const onOutcome = vi.fn();
+  const taps = careTaps(
+    {
+      mutate: (tap, callbacks) => {
+        observer.mutate(tap, callbacks).catch(() => undefined);
+      },
+      reset: () => {
+        observer.reset();
+      },
+    },
+    onOutcome,
+  );
+  return { queryClient, observer, taps, onOutcome };
+}
+
+describe("careTaps", () => {
+  it("sends one tap at a time, also two in the same task (the figure and the button)", async () => {
+    const late = lateAnswer();
+    const { api, sent } = apiAnswering(late.answer, () => Response.json(applied));
+    const { taps, onOutcome } = tapsFor(api);
+
+    taps.tap("pet");
+    taps.tap("pet");
+    await vi.waitFor(() => {
+      expect(sent).toHaveLength(1);
+    });
+    late.release(Response.json(applied));
+    await vi.waitFor(() => {
+      expect(onOutcome).toHaveBeenCalledTimes(1);
+    });
+    expect(sent).toHaveLength(1);
+
+    taps.tap("feed");
+    await vi.waitFor(() => {
+      expect(sent).toHaveLength(2);
+    });
+  });
+
+  it("hears the outcome of each tap, applied or refused", async () => {
+    const { api } = apiAnswering(
+      () => Response.json(applied),
+      () => Response.json(tooTired),
+    );
+    const { taps, onOutcome } = tapsFor(api);
+
+    taps.tap("feed");
+    await vi.waitFor(() => {
+      expect(onOutcome).toHaveBeenCalledTimes(1);
+    });
+    taps.tap("play");
+    await vi.waitFor(() => {
+      expect(onOutcome).toHaveBeenCalledTimes(2);
+    });
+
+    expect(onOutcome.mock.calls).toEqual([
+      ["feed", applied],
+      ["play", tooTired],
+    ]);
+  });
+
+  it("hears nothing of a tap that failed, and retry sends it again with the same key", async () => {
+    const { api, sent } = apiAnswering(problem(401, "unauthenticated"), () => Response.json(applied));
+    const { observer, taps, onOutcome } = tapsFor(api);
+
+    taps.tap("feed");
+    await vi.waitFor(() => {
+      expect(observer.getCurrentResult().isError).toBe(true);
+    });
+    expect(onOutcome).not.toHaveBeenCalled();
+
+    taps.retry();
+    await vi.waitFor(() => {
+      expect(onOutcome).toHaveBeenCalledWith("feed", applied);
+    });
+    expect(sent).toHaveLength(2);
+    expect(sent[1]?.body).toEqual(sent[0]?.body);
+  });
+
+  it("keeps a tap in flight, and its reaction, when Casa is read meanwhile", async () => {
+    const late = lateAnswer();
+    const { api, sent } = apiAnswering(late.answer, () => Response.json({ pet: BRU }));
+    const { queryClient, taps, onOutcome } = tapsFor(api);
+    onHomeRead(queryClient, taps.homeRead);
+
+    taps.tap("feed");
+    await vi.waitFor(() => {
+      expect(sent).toHaveLength(1);
+    });
+    await queryClient.query(homeQuery(api));
+    late.release(Response.json(applied));
+
+    await vi.waitFor(() => {
+      expect(onOutcome).toHaveBeenCalledWith("feed", applied);
+    });
+  });
+
+  it("still clears a refusal's text when Casa is read with no tap in flight", async () => {
+    const { api } = apiAnswering(
+      () => Response.json(tooTired),
+      () => Response.json({ pet: BRU }),
+    );
+    const { queryClient, observer, taps, onOutcome } = tapsFor(api);
+    onHomeRead(queryClient, taps.homeRead);
+
+    taps.tap("play");
+    await vi.waitFor(() => {
+      expect(onOutcome).toHaveBeenCalledTimes(1);
+    });
+    expect(careOutcomeText(observer.getCurrentResult().data)).toBe(texts.care.rejections.too_tired);
+
+    await queryClient.query(homeQuery(api));
+    expect(careOutcomeText(observer.getCurrentResult().data)).toBeNull();
   });
 });
