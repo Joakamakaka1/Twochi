@@ -723,3 +723,13 @@ def test_the_tastes_contract_names_the_catalogue() -> None:
         "$ref": "#/components/schemas/Affinity"
     }
     assert schemas["TastesOut"]["required"] == ["pet_id", "tastes"]
+    # The map's keys are the catalogue's: as an enum for JSON Schema, and as one
+    # optional property per item, which is what the generated client types.
+    tastes = schemas["TastesOut"]["properties"]["tastes"]
+    assert tastes["propertyNames"] == {"anyOf": item_key}
+    catalogue = [*schemas["FoodKey"]["enum"], *schemas["ActivityKey"]["enum"]]
+    assert tastes["properties"] == {
+        key: {"$ref": "#/components/schemas/Affinity"} for key in catalogue
+    }
+    assert tastes["additionalProperties"] is False
+    assert "required" not in tastes
