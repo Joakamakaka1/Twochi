@@ -122,7 +122,10 @@ def _seen(raw: str) -> tuple[Reaction | None, SicknessChange | None]:
     if sickness is not None and sickness not in SicknessChange:
         raise UnexpectedPayloadError
     reaction = None
-    if isinstance(item, str) and item in CATALOG and isinstance(affinity, int):
+    if isinstance(item, str) and item in CATALOG:
+        # A bool is an int to isinstance; neither it nor a number out of range is one.
+        if type(affinity) is not int or affinity not in Affinity:
+            raise UnexpectedPayloadError
         reaction = Reaction(item=ItemKey(item), affinity=Affinity(affinity))
     return reaction, None if sickness is None else SicknessChange(sickness)
 
