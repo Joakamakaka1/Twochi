@@ -4,12 +4,16 @@ The shell around them (`git worktree`, `supabase start`) runs for real when a sl
 created.
 """
 
+import shutil
 import subprocess
 import tomllib
 from pathlib import Path
+from typing import cast
 
 import pytest
+import slot
 from conftest import database_urls
+from git_env import git_environment
 from slot import (
     EXCLUDED_SERVICES,
     SlotError,
@@ -428,3 +432,212 @@ def test_a_slot_is_not_removed_from_a_folder_inside_it(
     monkeypatch.chdir(inside)
 
     assert main(["down", "2"], checkout=MAIN_FOLDER) == 1
+
+
+# --- Removing a slot, with real git on a throwaway repository -------------------------
+
+
+# The tests below replace `subprocess.run`; their own git keeps the real one.
+RUN = subprocess.run
+
+
+def git(repo: Path, *args: str) -> str:
+    return RUN(
+        ["git", *args],
+        cwd=repo,
+        env=git_environment(),
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+
+@pytest.fixture
+def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A main folder with slot 2 on a clean, pushed branch and on the slot's config."""
+    git(tmp_path, "init", "--quiet", "--initial-branch=main", "repo")
+    repo = (tmp_path / "repo").resolve()
+    git(repo, "config", "user.name", "Test")
+    git(repo, "config", "user.email", "test@example.invalid")
+    git(repo, "config", "commit.gpgsign", "false")
+    checkout_at(repo, MAIN)
+    (repo / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+    git(repo, "add", "--all")
+    git(repo, "commit", "--quiet", "--message", "chore: first")
+    git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    folder = repo / ".claude" / "worktrees" / "slot-2"
+    git(repo, "worktree", "add", "--quiet", "-b", "two-2-x", str(folder))
+    (folder / "supabase" / "config.toml").write_bytes(
+        slot_config(MAIN, 2).encode("utf-8")
+    )
+    git(folder, "update-index", "--skip-worktree", "supabase/config.toml")
+    (folder / "node_modules" / ".pnpm").mkdir(parents=True)
+    monkeypatch.setattr(slot, "_main_folder", lambda: repo)
+    return repo
+
+
+def slot_2(repo: Path) -> Path:
+    return repo / ".claude" / "worktrees" / "slot-2"
+
+
+def listed(repo: Path) -> bool:
+    return f"worktree {slot_2(repo).as_posix()}\n" in git(
+        repo, "worktree", "list", "--porcelain"
+    )
+
+
+def leave_leftovers(repo: Path) -> None:
+    """What Git for Windows leaves when a process holds a file of the worktree open."""
+    git(repo, "worktree", "remove", "--force", str(slot_2(repo)))
+    held = slot_2(repo) / "node_modules" / ".pnpm" / "held.txt"
+    held.parent.mkdir(parents=True)
+    held.write_text("x", encoding="utf-8")
+
+
+def as_named(name: str) -> str:
+    """`shutil.which` for the tools a test fakes: they need not be installed."""
+    return name
+
+
+@pytest.fixture
+def windows_git(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    """Real git, except `git worktree remove`, which fails as on Windows with a file
+    held open: the worktree is no longer listed and its folder stays. Supabase, uv,
+    pnpm and `git fetch` are not run. Returns the commands that ran, by name."""
+    ran: list[list[str]] = []
+
+    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        named = [Path(args[0]).stem, *args[1:]]
+        ran.append(named)
+        if named[0] in {"supabase", "uv", "pnpm"} or named[1:2] == ["fetch"]:
+            return subprocess.CompletedProcess(args, 0)
+        if named[1:3] == ["worktree", "remove"]:
+            cwd = cast(Path, kwargs["cwd"])
+            leave_leftovers(cwd)
+            return subprocess.CompletedProcess(args, 255)
+        return RUN(args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(shutil, "which", as_named)
+    return ran
+
+
+def test_a_removal_that_fails_after_git_drops_the_worktree_removes_the_rest(
+    repo: Path, windows_git: list[list[str]]
+) -> None:
+    assert main(["down", "2"], checkout=repo) == 0
+
+    assert not slot_2(repo).exists()
+    assert not listed(repo)
+    assert ["git", "worktree", "prune"] in windows_git
+
+
+def test_slot_down_on_the_leftovers_removes_them(
+    repo: Path, windows_git: list[list[str]]
+) -> None:
+    leave_leftovers(repo)
+
+    assert main(["down", "2"], checkout=repo) == 0
+
+    assert not slot_2(repo).exists()
+    assert ["git", "worktree", "prune"] in windows_git
+
+
+def test_a_removal_that_fails_with_the_worktree_still_listed_keeps_it(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+
+    def run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        if Path(args[0]).stem == "supabase" or args[1:3] == ["worktree", "remove"]:
+            code = 0 if Path(args[0]).stem == "supabase" else 128
+            return subprocess.CompletedProcess(args, code)
+        return RUN(args, **kwargs)  # type: ignore[call-overload]
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+    assert main(["down", "2"], checkout=repo) == 1
+
+    assert slot_2(repo).is_dir()
+    assert listed(repo)
+    assert "worktree remove" in capsys.readouterr().err
+
+
+def test_leftovers_still_in_use_say_to_run_it_again(
+    repo: Path,
+    windows_git: list[list[str]],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def in_use(path: Path) -> None:
+        raise PermissionError(f"[WinError 32] in use: '{path}'")
+
+    monkeypatch.setattr(shutil, "rmtree", in_use)
+
+    assert main(["down", "2"], checkout=repo) == 1
+
+    assert not listed(repo)
+    assert "`just slot-down 2` again" in capsys.readouterr().err
+
+
+def test_a_hooks_git_variables_do_not_reach_a_slots_git(
+    repo: Path, windows_git: list[list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Under the pre-push hook they would point git at the repository being pushed.
+    monkeypatch.setenv("GIT_DIR", str(repo.parent / "elsewhere" / ".git"))
+
+    assert main(["down", "2"], checkout=repo) == 0
+
+    monkeypatch.delenv("GIT_DIR")
+    assert not slot_2(repo).exists()
+    assert not listed(repo)
+
+
+def test_dependencies_are_copies_and_no_links_to_a_shared_store() -> None:
+    # On Windows no link of a loaded .pyd or .node can be deleted: a link would keep a
+    # slot's .venv or node_modules while any other checkout has that module loaded.
+    uv = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert uv["tool"]["uv"]["link-mode"] == "copy"
+    workspace = (ROOT / "pnpm-workspace.yaml").read_text(encoding="utf-8")
+    assert "packageImportMethod: copy" in workspace.splitlines()
+
+
+def test_a_folder_with_its_own_git_is_not_taken_for_leftovers(
+    repo: Path, windows_git: list[list[str]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    # What a failed removal leaves has no `.git`; a clone in its place may hold work.
+    leave_leftovers(repo)
+    git(slot_2(repo), "init", "--quiet")
+
+    assert main(["down", "2"], checkout=repo) == 1
+
+    assert (slot_2(repo) / ".git").is_dir()
+    assert "remove it by hand" in capsys.readouterr().err
+    assert not any(named[0] == "supabase" for named in windows_git)
+
+
+def test_leftovers_that_kept_a_git_file_to_a_dropped_worktree_are_removed(
+    repo: Path, windows_git: list[list[str]]
+) -> None:
+    # Git deletes in folder order and stops at a held file: one under `.claude/` sorts
+    # before `.git`, whose file then points at what git already dropped.
+    gone = repo / ".git" / "worktrees" / "slot-2"
+    leave_leftovers(repo)
+    (slot_2(repo) / ".git").write_text(f"gitdir: {gone.as_posix()}\n", encoding="utf-8")
+
+    assert main(["down", "2"], checkout=repo) == 0
+
+    assert not slot_2(repo).exists()
+
+
+def test_a_hooks_git_variables_do_not_reach_the_branch_lookup_of_slot_up(
+    repo: Path, windows_git: list[list[str]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Pointed at another repository, the lookup misses the branch and tries to make it.
+    git(repo, "branch", "two-3-y")
+    monkeypatch.setenv("GIT_DIR", str(repo.parent / "elsewhere" / ".git"))
+
+    assert main(["up", "3", "two-3-y"], checkout=repo) == 0
+
+    monkeypatch.delenv("GIT_DIR")
+    folder = repo / ".claude" / "worktrees" / "slot-3"
+    assert git(folder, "branch", "--show-current").strip() == "two-3-y"
