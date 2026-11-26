@@ -1,6 +1,6 @@
 import type { Animation, PetSceneHandle } from "../../scene";
 import type { CareAction, CareActionResult } from "../../shared";
-import { changeRest, openStage, react, reactionAnimation, tick } from "./petAnimation";
+import { changeRest, openStage, react, reactionAnimation, tick, TICKLE_ANIMATION } from "./petAnimation";
 import type { PetStage, StageStep } from "./petAnimation";
 
 /** What drives the pet's scene: its rest, its reactions, and the scene itself. */
@@ -9,6 +9,8 @@ export interface StageDriver {
   attach: (scene: PetSceneHandle | null) => void;
   rest: (animation: Animation) => void;
   react: (action: CareAction, result: CareActionResult) => void;
+  /** A tickle on the figure: a giggle, which the next tickle starts again. */
+  tickle: () => void;
   stop: () => void;
 }
 
@@ -41,6 +43,9 @@ export function createStageDriver(): StageDriver {
     },
     react: (action, result) => {
       if (stage !== null) apply(react(stage, reactionAnimation(action, result), Date.now()));
+    },
+    tickle: () => {
+      if (stage !== null) apply(react(stage, TICKLE_ANIMATION, Date.now()));
     },
     stop: () => {
       clearTimeout(timer);

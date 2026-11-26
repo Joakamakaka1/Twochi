@@ -7,9 +7,9 @@ import type { StageDriver } from "./stageDriver";
 
 /**
  * The pet's stage: it plays the rest that fits the pet on the scene given to `attach`
- * (a callback ref), and `react` plays the reaction to a care result.
+ * (a callback ref), `react` plays the reaction to a care result and `tickle` a giggle.
  */
-export function usePetStage(pet: Pick<Pet, "mood" | "asleep">): Pick<StageDriver, "attach" | "react"> {
+export function usePetStage(pet: Pick<Pet, "mood" | "asleep">): Pick<StageDriver, "attach" | "react" | "tickle"> {
   const [driver] = useState(createStageDriver);
   const rest = restAnimation(pet);
   useEffect(() => {

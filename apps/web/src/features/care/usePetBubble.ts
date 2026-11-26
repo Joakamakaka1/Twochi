@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 
 import type { CareAction, CareActionResult } from "../../shared";
+import { tickled } from "./bubble";
 import type { LastOutcome } from "./bubble";
 
 /**
@@ -17,5 +18,12 @@ export function usePetBubble() {
   const hear = useCallback((action: CareAction, result: CareActionResult) => {
     setHeard({ last: { action, result, at: Date.now() }, luck: Math.random() });
   }, []);
-  return { last: heard.last, luck: heard.luck, hear };
+  // A fit of tickles keeps its giggle (and its luck) while it goes on.
+  const hearTickle = useCallback(() => {
+    setHeard((before) => {
+      const last = tickled(before.last, Date.now());
+      return last === before.last ? before : { last, luck: Math.random() };
+    });
+  }, []);
+  return { last: heard.last, luck: heard.luck, hear, hearTickle };
 }

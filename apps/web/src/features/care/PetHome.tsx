@@ -1,9 +1,9 @@
-import { lazy, Suspense, useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import type { MouseEvent } from "react";
 
 import { texts } from "../../shared";
 import type { CareAction, CareActionResult, Pet } from "../../shared";
-import { bubbleKey, chooseBubble, currentOutcome } from "./bubble";
+import { bubbleKey, celebrating, chooseBubble } from "./bubble";
 import { Celebration } from "./Celebration";
 import { ACTION_ICONS, ROOM_ICONS, SICK_ICON } from "./icons";
 import { needBars } from "./needBars";
@@ -13,6 +13,7 @@ import styles from "./PetHome.module.css";
 import { roomBackdrop } from "./roomBackdrop";
 import { ROOMS } from "./rooms";
 import type { Room } from "./rooms";
+import { petTouches } from "./touch";
 import { opensTray } from "./tray";
 import type { TrayAction } from "./tray";
 import { TraySheet } from "./TraySheet";
@@ -33,8 +34,8 @@ export function PetHome({ pet }: { pet: Pet }) {
   // it gets the focus back when it goes.
   const [tray, setTray] = useState<{ action: TrayAction; opener: HTMLElement } | null>(null);
   const now = useNow(TICK_MS);
-  const { attach, react } = usePetStage(pet);
-  const { last, luck, hear } = usePetBubble();
+  const { attach, react, tickle } = usePetStage(pet);
+  const { last, luck, hear, hearTickle } = usePetBubble();
   // Each outcome the engine gives plays its reaction and takes the bubble for a while.
   const onOutcome = useCallback(
     (action: CareAction, result: CareActionResult) => {
@@ -45,15 +46,30 @@ export function PetHome({ pet }: { pet: Pet }) {
   );
   const care = useCareActions(pet.id, onOutcome);
   const { tap } = care;
-  // Stable, so the memoised scene skips the bars' tick every second.
+  // The first touch of a burst pets, as the button does; tickles stay on screen.
+  const touches = useMemo(
+    () =>
+      petTouches({
+        pet: () => {
+          tap("pet");
+        },
+        tickle: () => {
+          tickle();
+          hearTickle();
+        },
+      }),
+    [tap, tickle, hearTickle],
+  );
+  // Stable while the pet sleeps or not, so the memoised scene skips the bars' tick.
+  const { asleep } = pet;
   const petByTouch = useCallback(() => {
-    tap("pet");
-  }, [tap]);
+    touches(performance.now(), asleep);
+  }, [touches, asleep]);
   const actions = ROOMS.find((each) => each.room === room)?.actions ?? [];
   const backdrop = roomBackdrop(room, pet);
   const bars = needBars(pet, now);
   const bubble = chooseBubble({ pet, bars, now: now.getTime() }, last, () => luck);
-  const healing = currentOutcome(last, now.getTime())?.result.sickness === "healed";
+  const healing = celebrating(last, now.getTime());
   const sick = pet.mood === "sick";
 
   // While a tap is in flight the buttons say so but stay focusable (aria-disabled), so

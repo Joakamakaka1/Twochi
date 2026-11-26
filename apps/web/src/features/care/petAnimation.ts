@@ -26,6 +26,9 @@ const APPLIED: Record<CareAction, Animation> = {
 // and disgust is a comic tantrum.
 const BY_AFFINITY: Record<Affinity, Animation> = { "2": "happy", "1": "happy", "0": "eat", "-1": "eat", "-2": "angry" };
 
+/** Tickles are a fit of giggles: the same joy as a petting, with no request behind. */
+export const TICKLE_ANIMATION: Animation = "happy";
+
 /** How the pet reacts to a care action, applied or refused by the engine. */
 export function reactionAnimation(
   action: CareAction,
