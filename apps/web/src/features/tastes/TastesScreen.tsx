@@ -34,11 +34,12 @@ export function TastesScreen() {
           <ul className={styles.items}>
             {section.items.map((item) => (
               <li key={item.key} className={styles.item}>
-                <p id={`taste-${item.key}`} className={styles.name}>
+                <p className={styles.name}>
                   <span aria-hidden="true" className={styles.icon}>
                     {item.icon}
                   </span>
-                  {item.name}
+                  {/* The group's name: the item's, without its icon. */}
+                  <span id={`taste-${item.key}`}>{item.name}</span>
                 </p>
                 <div role="group" aria-labelledby={`taste-${item.key}`} className={styles.faces}>
                   {FACES.map((face) => (
