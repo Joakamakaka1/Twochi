@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { phrases } from "../../shared";
 import type { Affinity, CareAction, CareActionResult, ItemKey, Mood, Need, Pet, Rejection } from "../../shared";
-import { BUBBLE_MS, bubbleKey, chooseBubble } from "./bubble";
+import { BUBBLE_MS, bubbleKey, celebrating, chooseBubble, tickled } from "./bubble";
 import type { BubbleState, LastOutcome } from "./bubble";
 import { needBars } from "./needBars";
 
@@ -121,6 +121,17 @@ describe("the bubble after a care action", () => {
     expect(chooseBubble(state, refused("asleep", true), FIRST)).toBe(phrases.rejections.asleep[0]);
   });
 
+  it("grumbles when touched or petted asleep, with words of its own", () => {
+    const touchedAsleep = outcome("pet", {
+      applied: false,
+      rejection: "asleep",
+      pet: { ...stateOf({}).pet, asleep: true },
+    });
+
+    expect(chooseBubble(stateOf({ asleep: true }), touchedAsleep, FIRST)).toBe(phrases.grumble[0]);
+    expect(chooseBubble(stateOf({ asleep: true }), touchedAsleep, LAST)).toBe(phrases.grumble.at(-1));
+  });
+
   it("says «ya vale» to a petting that raised no affection", () => {
     const state = stateOf({});
 
@@ -163,6 +174,47 @@ describe("the bubble after a care action", () => {
   });
 });
 
+const TICKLE: LastOutcome = { action: "tickle", at: NOW };
+
+describe("the bubble while tickled", () => {
+  it("giggles for a few seconds, then goes back to the bubble of its state", () => {
+    const state = stateOf({ mood: "happy" });
+
+    expect(chooseBubble(state, TICKLE, FIRST)).toBe(phrases.tickles[0]);
+    expect(chooseBubble({ ...state, now: NOW + BUBBLE_MS - 1 }, TICKLE, LAST)).toBe(phrases.tickles.at(-1));
+    expect(chooseBubble({ ...state, now: NOW + BUBBLE_MS }, TICKLE, FIRST)).toBe(phrases.moods.happy[0]);
+  });
+
+  it("keeps the same giggle while the fit of tickles goes on", () => {
+    expect(tickled(TICKLE, NOW + 300)).toBe(TICKLE);
+    expect(tickled(TICKLE, NOW + BUBBLE_MS - 1)).toBe(TICKLE);
+  });
+
+  it("starts a new giggle after anything else, or once the last one is over", () => {
+    expect(tickled(null, NOW)).toEqual({ action: "tickle", at: NOW });
+    expect(tickled(TICKLE, NOW + BUBBLE_MS)).toEqual({ action: "tickle", at: NOW + BUBBLE_MS });
+    expect(tickled(outcome("pet", { deltas: { affection: 15 } }), NOW + 100)).toEqual({
+      action: "tickle",
+      at: NOW + 100,
+    });
+  });
+});
+
+describe("celebrating", () => {
+  it("is true while the pet talks about having healed", () => {
+    const healed = outcome("bathe", { sickness: "healed" });
+
+    expect(celebrating(healed, NOW)).toBe(true);
+    expect(celebrating(healed, NOW + BUBBLE_MS)).toBe(false);
+  });
+
+  it("is false after anything else, tickles included", () => {
+    expect(celebrating(null, NOW)).toBe(false);
+    expect(celebrating(TICKLE, NOW)).toBe(false);
+    expect(celebrating(outcome("bathe", { sickness: "fell_sick" }), NOW)).toBe(false);
+  });
+});
+
 describe("the bubble's variety", () => {
   it("picks among several phrases with the random given", () => {
     const state = stateOf({ mood: "happy" });
@@ -180,6 +232,8 @@ describe("the bubble's variety", () => {
       phrases.fellSick,
       phrases.enough,
       phrases.asleep,
+      phrases.grumble,
+      phrases.tickles,
       ...Object.values(phrases.reactions.food),
       ...Object.values(phrases.reactions.activity),
       ...Object.values(phrases.rejections),

@@ -50,6 +50,21 @@ describe("the stage driver", () => {
     expect(scene.played).toEqual(["idle", "eat", "idle"]);
   });
 
+  it("giggles at each tickle, and goes back to rest once the last one is over", () => {
+    const scene = fakeScene();
+    const driver = createStageDriver();
+    driver.attach(scene);
+    driver.rest("sad");
+
+    driver.tickle();
+    vi.advanceTimersByTime(REACTION_MS - 1);
+    driver.tickle();
+    vi.advanceTimersByTime(REACTION_MS - 1);
+    expect(scene.played).toEqual(["sad", "happy", "happy"]);
+    vi.advanceTimersByTime(1);
+    expect(scene.played).toEqual(["sad", "happy", "happy", "sad"]);
+  });
+
   it("does not go back to rest once stopped", () => {
     const scene = fakeScene();
     const driver = createStageDriver();
