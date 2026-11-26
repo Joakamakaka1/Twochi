@@ -593,3 +593,17 @@ def test_dependencies_are_copies_and_no_links_to_a_shared_store() -> None:
     assert uv["tool"]["uv"]["link-mode"] == "copy"
     workspace = (ROOT / "pnpm-workspace.yaml").read_text(encoding="utf-8")
     assert "packageImportMethod: copy" in workspace.splitlines()
+
+
+def test_a_folder_with_its_own_git_is_not_taken_for_leftovers(
+    repo: Path, windows_git: list[list[str]], capsys: pytest.CaptureFixture[str]
+) -> None:
+    # What a failed removal leaves has no `.git`; a clone in its place may hold work.
+    leave_leftovers(repo)
+    git(slot_2(repo), "init", "--quiet")
+
+    assert main(["down", "2"], checkout=repo) == 1
+
+    assert (slot_2(repo) / ".git").is_dir()
+    assert "remove it by hand" in capsys.readouterr().err
+    assert not any(named[0] == "supabase" for named in windows_git)
