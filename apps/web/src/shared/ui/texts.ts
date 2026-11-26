@@ -6,6 +6,15 @@ export const texts = {
   loading: "Cargando…",
   failure: "Algo ha fallado. Inténtalo de nuevo.",
   retry: "Reintentar",
+  // «Tus gustos»: each person rates the pet that represents them (GLOSSARY.md, «Afinidad»).
+  tastes: {
+    open: "Tus gustos",
+    backHome: "Volver a Casa",
+    title: "Tus gustos",
+    intro: "Tu mascota es como tú. Dile qué te gusta: tu pareja lo descubrirá cuidándola.",
+    kinds: { food: "Comidas", activity: "Actividades" },
+    faces: { "-2": "Lo odio", "-1": "No me gusta", "0": "Me da igual", "1": "Me gusta", "2": "Me encanta" },
+  },
   auth: {
     signInWithGoogle: "Entrar con Google",
     enrollTitle: "Protege tu cuenta",

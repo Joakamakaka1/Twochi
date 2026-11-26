@@ -30,6 +30,9 @@ export type {
   Need,
   Pet,
   Rejection,
+  TasteRating,
+  Tastes,
   TokenSource,
 } from "./api";
+export { ACTIVITIES, FOODS } from "./ui";
 export { devTexts, ITEM_ICONS, texts } from "./ui";

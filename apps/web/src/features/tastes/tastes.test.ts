@@ -1,5 +1,5 @@
 import { MutationObserver, QueryClient } from "@tanstack/react-query";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, AUTH_HEADER, createApi, ITEM_ICONS } from "../../shared";
 import type { Tastes } from "../../shared";
@@ -159,7 +159,9 @@ describe("rating a taste", () => {
     const { queryClient, observer } = ratingWith(api);
 
     const rated = observer.mutate({ item_key: "pizza", affinity: 2 });
-    await Promise.resolve();
+    await vi.waitFor(() => {
+      expect(sent).toHaveLength(1);
+    });
 
     expect(queryClient.getQueryData<Tastes>(TASTES_KEY)).toEqual({ pet_id: ALI, tastes: { pizza: 2 } });
     answer(Response.json({ item_key: "pizza", affinity: 2 }));
