@@ -68,26 +68,38 @@ export interface CareTaps {
   homeRead: () => void;
 }
 
+/**
+ * One tap in flight at a time: the figure and the button can land in the same task,
+ * before a render disables the buttons. `onOutcome` hears each tap the engine applied
+ * or refused.
+ */
 export function careTaps(mutation: CareMutation, onOutcome: (action: CareAction, result: CareActionResult) => void): CareTaps {
+  let inFlight = false;
   let last: CareTap | undefined;
   const send = (tap: CareTap) => {
+    inFlight = true;
     last = tap;
     mutation.mutate(tap, {
       onSuccess: (result) => {
         onOutcome(tap.action, result);
       },
-      onSettled: () => undefined,
+      onSettled: () => {
+        inFlight = false;
+      },
     });
   };
   return {
     tap: (action) => {
-      send(careTap(action));
+      if (!inFlight) send(careTap(action));
     },
     retry: () => {
-      if (last !== undefined) send(last);
+      if (!inFlight && last !== undefined) send(last);
     },
+    // The reset clears a refusal's text, which is about the pet before this read. A tap
+    // in flight has no text yet, and resetting would detach it: its reaction and the end
+    // of the lock would never arrive.
     homeRead: () => {
-      mutation.reset();
+      if (!inFlight) mutation.reset();
     },
   };
 }

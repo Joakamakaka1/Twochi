@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useApi } from "../../shared";
 import type { CareAction, CareActionResult, Pet } from "../../shared";
-import { careActionMutation, careFailureText, careOutcomeText, careTap, onHomeRead } from "./careActions";
-import type { CareTap } from "./careActions";
+import { careActionMutation, careFailureText, careOutcomeText, careTaps, onHomeRead } from "./careActions";
 import { homeQuery, refreshHomeOnForeground } from "./home";
 
 export function useHome() {
@@ -31,25 +30,13 @@ export function useNow(periodMs: number): Date {
 export function useCareActions(petId: Pet["id"], onOutcome: (action: CareAction, result: CareActionResult) => void) {
   const queryClient = useQueryClient();
   const mutation = useMutation(careActionMutation(useApi(), petId, queryClient));
-  const { reset } = mutation;
-  useEffect(() => onHomeRead(queryClient, reset), [queryClient, reset]);
-  const send = (tap: CareTap) => {
-    mutation.mutate(tap, {
-      onSuccess: (result) => {
-        onOutcome(tap.action, result);
-      },
-    });
-  };
+  const { mutate, reset } = mutation;
+  // mutate, reset and onOutcome are stable, so the taps (and their lock) live as long as Casa.
+  const taps = useMemo(() => careTaps({ mutate, reset }, onOutcome), [mutate, reset, onOutcome]);
+  useEffect(() => onHomeRead(queryClient, taps.homeRead), [queryClient, taps]);
   return {
-    // Ignored while a tap is in flight, as the disabled buttons are: touching the pet on
-    // the scene lands here too.
-    tap: (action: CareAction) => {
-      if (!mutation.isPending) send(careTap(action));
-    },
-    // The tap that failed, sent again with its own key.
-    retry: () => {
-      if (mutation.variables !== undefined) send(mutation.variables);
-    },
+    tap: taps.tap,
+    retry: taps.retry,
     isPending: mutation.isPending,
     failure: careFailureText(mutation.error),
     rejection: careOutcomeText(mutation.data),
