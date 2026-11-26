@@ -341,7 +341,7 @@ def test_every_api_collection_is_a_plural_noun() -> None:
     collections = collections_of(paths)
     singular = {c for c in collections if not c.endswith("s")} - singular_allowed
 
-    assert "homes" in collections
+    assert {"homes", "pets", "tastes"} <= collections
     assert singular == set()
 
 
@@ -571,3 +571,148 @@ def test_the_contract_names_every_item_of_the_catalogue() -> None:
         assert tuple(refs) == item_key
     assert schemas["Affinity"]["enum"] == [-2, -1, 0, 1, 2]
     assert schemas["SicknessChange"]["enum"] == ["fell_sick", "healed"]
+
+
+# Tastes: each person rates the pet that represents them (ADR 0015).
+
+
+def my_tastes(client: TestClient, auth: str | None) -> Any:
+    headers = {} if auth is None else {"X-Twochi-Auth": auth}
+    return client.get("/api/tastes/me", headers=headers)
+
+
+def rate(client: TestClient, auth: str | None, item: object, body: object) -> Any:
+    headers = {} if auth is None else {"X-Twochi-Auth": auth}
+    return client.put(f"/api/tastes/me/{item}", json=body, headers=headers)
+
+
+@pytest.mark.anyio
+async def test_tastes_list_only_what_the_caller_rated_for_their_own_pet(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create()
+    alice = token_of(couple, couple.alice)
+
+    rated = rate(game, alice, "pizza", {"affinity": 2})
+    rate(game, alice, "ball", {"affinity": -2})
+    rate(game, alice, "pizza", {"affinity": 1})
+
+    assert rated.status_code == 200
+    assert rated.json() == {"item_key": "pizza", "affinity": 2}
+    response = my_tastes(game, alice)
+    assert response.status_code == 200
+    assert response.json() == {
+        "pet_id": str(couple.pet_of_alice.id),
+        "tastes": {"pizza": 1, "ball": -2},
+    }
+
+
+@pytest.mark.anyio
+async def test_the_caretaker_never_reads_the_tastes_of_the_pet_they_care_for(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create()
+    rate(game, token_of(couple, couple.alice), "sushi", {"affinity": 2})
+
+    # Bruno cares for Alice's pet: his `me` is his own pet, with nothing rated.
+    response = my_tastes(game, token_of(couple, couple.bruno))
+
+    assert response.json() == {"pet_id": str(couple.pet_of_bruno.id), "tastes": {}}
+
+
+def test_no_route_reads_the_tastes_of_a_pet_by_its_id() -> None:
+    verifier = TokenVerifier(
+        issuer=ISSUER, audience=AUDIENCE, signing_key=lambda _token: public_jwk()
+    )
+    app = create_app(verifier, db=PostgresDatabase(None), clock=FixedClock(NOW))
+    paths: dict[str, Any] = app.openapi()["paths"]
+
+    # Only the caller's own: no pet id, no other person, in any route about tastes.
+    tastes = {path for path in paths if "taste" in path}
+    assert tastes == {"/api/tastes/me", "/api/tastes/me/{item_key}"}
+    assert set(paths["/api/tastes/me/{item_key}"]) == {"put"}
+
+
+@pytest.mark.anyio
+async def test_tastes_have_no_pet_until_both_people_arrive(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create(with_pets=False)
+    alice = token_of(couple, couple.alice)
+
+    listed = my_tastes(game, alice)
+    rated = rate(game, alice, "pizza", {"affinity": 2})
+
+    assert listed.json() == {"pet_id": None, "tastes": {}}
+    assert rated.status_code == 409
+    assert rated.headers["content-type"] == "application/problem+json"
+    assert rated.json()["code"] == "no_pet_yet"
+
+
+@pytest.mark.parametrize("item", ["caviar", "PIZZA", "pizza%20", "1"])
+def test_rating_an_unknown_item_is_an_invalid_item(game: TestClient, item: str) -> None:
+    response = rate(game, token(), item, {"affinity": 1})
+
+    assert response.status_code == 422
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "invalid_item"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [{"affinity": 3}, {"affinity": -3}, {"affinity": "2"}, {"affinity": 1.5}, {}],
+    ids=["above", "below", "text", "fraction", "missing"],
+)
+def test_an_affinity_out_of_range_is_a_422_problem(
+    game: TestClient, body: object
+) -> None:
+    response = rate(game, token(), "pizza", body)
+
+    assert response.status_code == 422
+    assert response.headers["content-type"] == "application/problem+json"
+    assert response.json()["code"] == "invalid_request"
+
+
+def rate_pizza(client: TestClient, auth: str | None) -> Any:
+    return rate(client, auth, "pizza", {"affinity": 1})
+
+
+TASTE_ROUTES = pytest.mark.parametrize(
+    "call", [my_tastes, rate_pizza], ids=["get", "put"]
+)
+
+
+@TASTE_ROUTES
+def test_tastes_need_a_token(game: TestClient, call: Callable[..., Any]) -> None:
+    response = call(game, None)
+
+    assert response.status_code == 401
+    assert response.json()["code"] == "unauthenticated"
+
+
+@TASTE_ROUTES
+def test_tastes_need_the_second_factor(
+    game: TestClient, call: Callable[..., Any]
+) -> None:
+    response = call(game, token(aal="aal1"))
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "mfa_required"
+
+
+def test_the_tastes_contract_names_the_catalogue() -> None:
+    verifier = TokenVerifier(
+        issuer=ISSUER, audience=AUDIENCE, signing_key=lambda _token: public_jwk()
+    )
+    app = create_app(verifier, db=PostgresDatabase(None), clock=FixedClock(NOW))
+    schemas: dict[str, Any] = app.openapi()["components"]["schemas"]
+
+    item_key = [
+        {"$ref": "#/components/schemas/FoodKey"},
+        {"$ref": "#/components/schemas/ActivityKey"},
+    ]
+    assert schemas["TasteOut"]["properties"]["item_key"]["anyOf"] == item_key
+    assert schemas["TasteIn"]["properties"]["affinity"] == {
+        "$ref": "#/components/schemas/Affinity"
+    }
+    assert schemas["TastesOut"]["required"] == ["pet_id", "tastes"]
