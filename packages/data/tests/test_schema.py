@@ -61,3 +61,44 @@ async def test_one_pet_never_repeats_an_idempotency_key(couples: Couples) -> Non
 
     with pytest.raises(Exception, match="duplicate key"):
         await add_event(couples, couple, "once")
+
+
+@pytest.mark.parametrize("affinity", [-3, 3])
+async def test_an_affinity_stays_between_minus_two_and_two(
+    couples: Couples, affinity: int
+) -> None:
+    couple = await couples.create()
+
+    with pytest.raises(Exception, match="check constraint"):
+        await couples.admin.execute(
+            "insert into app.item_affinities (couple_id, pet_id, item_key, affinity) "
+            "values ($1, $2, 'pizza', $3)",
+            couple.id,
+            couple.pet_of_alice.id,
+            affinity,
+        )
+
+
+async def test_a_pet_has_one_affinity_per_item(couples: Couples) -> None:
+    couple = await couples.create()
+    insert = (
+        "insert into app.item_affinities (couple_id, pet_id, item_key, affinity) "
+        "values ($1, $2, 'pizza', 1)"
+    )
+    await couples.admin.execute(insert, couple.id, couple.pet_of_alice.id)
+
+    with pytest.raises(Exception, match="duplicate key"):
+        await couples.admin.execute(insert, couple.id, couple.pet_of_alice.id)
+
+
+async def test_a_taste_belongs_to_a_pet_of_its_own_couple(couples: Couples) -> None:
+    ours = await couples.create()
+    theirs = await couples.create()
+
+    with pytest.raises(Exception, match="foreign key"):
+        await couples.admin.execute(
+            "insert into app.item_affinities (couple_id, pet_id, item_key, affinity) "
+            "values ($1, $2, 'pizza', 1)",
+            ours.id,
+            theirs.pet_of_alice.id,
+        )

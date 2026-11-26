@@ -11,7 +11,7 @@ from twochi_data.sql import Connection, bool_at, connect, text_at
 
 pytestmark = pytest.mark.anyio
 
-TABLES = ["couples", "profiles", "pets", "pet_needs", "pet_events"]
+TABLES = ["couples", "profiles", "pets", "pet_needs", "pet_events", "item_affinities"]
 
 # Local Supabase's superuser (fixed local credentials, never a deployed database).
 SUPERUSER_URL = ADMIN_URL.replace("postgres:postgres@", "supabase_admin:postgres@", 1)
@@ -48,6 +48,7 @@ async def visible_rows(couple: TestCouple, table: str, *, aal: str) -> object:
 
 
 async def add_event(couples: Couples, couple: TestCouple) -> None:
+    """An event and a taste on Alice's pet, so every table has a row of the couple."""
     await couples.admin.execute(
         "insert into app.pet_events "
         "(couple_id, pet_id, source, action, rules_version, idempotency_key) "
@@ -55,6 +56,12 @@ async def add_event(couples: Couples, couple: TestCouple) -> None:
         couple.id,
         couple.pet_of_alice.id,
         f"birth:{couple.pet_of_alice.id}",
+    )
+    await couples.admin.execute(
+        "insert into app.item_affinities (couple_id, pet_id, item_key, affinity) "
+        "values ($1, $2, 'pizza', 2)",
+        couple.id,
+        couple.pet_of_alice.id,
     )
 
 
@@ -290,6 +297,7 @@ GRANTS = {
     "pets": {"SELECT", "UPDATE"},
     "pet_needs": {"SELECT", "UPDATE"},
     "pet_events": {"SELECT", "INSERT"},
+    "item_affinities": {"SELECT", "INSERT", "UPDATE"},
 }
 
 PRIVILEGES = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE"]
@@ -322,6 +330,7 @@ async def test_authenticated_holds_only_the_engines_privileges(table: str) -> No
 UPDATABLE_COLUMNS = {
     "pets": {"asleep", "sick_since"},
     "pet_needs": {"value", "updated_at"},
+    "item_affinities": {"affinity", "updated_at"},
 }
 
 
@@ -340,3 +349,92 @@ async def test_the_engine_updates_only_the_state_it_owns(table: str) -> None:
         await connection.close()
 
     assert {text_at(row, "name") for row in rows} == UPDATABLE_COLUMNS[table]
+
+
+# Tastes (ADR 0015): both people read them, only the person a pet represents writes.
+
+RATE = """
+with rated as (
+  insert into app.item_affinities (couple_id, pet_id, item_key, affinity)
+  values ($1, $2, 'sushi', -2)
+  returning 1
+)
+select count(*) as value from rated
+"""
+
+RERATE = """
+with rated as (
+  update app.item_affinities set affinity = 1, updated_at = now()
+  where pet_id = $1 and item_key = 'pizza'
+  returning 1
+)
+select count(*) as value from rated
+"""
+
+
+async def test_a_person_rates_the_pet_that_represents_them(couples: Couples) -> None:
+    couple = await couples.create()
+
+    rated = await as_authenticated(
+        couple.actor(couple.alice).claims, RATE, couple.id, couple.pet_of_alice.id
+    )
+
+    assert rated == 1
+
+
+async def test_the_caretaker_never_rates_the_pet_they_care_for(
+    couples: Couples,
+) -> None:
+    couple = await couples.create()
+
+    with pytest.raises(Exception, match="row-level security"):
+        await as_authenticated(
+            couple.actor(couple.bruno).claims, RATE, couple.id, couple.pet_of_alice.id
+        )
+
+
+async def test_a_person_changes_a_taste_of_the_pet_that_represents_them(
+    couples: Couples,
+) -> None:
+    couple = await couples.create()
+    await add_event(couples, couple)
+
+    changed = await as_authenticated(
+        couple.actor(couple.alice).claims, RERATE, couple.pet_of_alice.id
+    )
+
+    assert changed == 1
+
+
+async def test_the_caretaker_never_changes_a_taste(couples: Couples) -> None:
+    couple = await couples.create()
+    await add_event(couples, couple)
+
+    changed = await as_authenticated(
+        couple.actor(couple.bruno).claims, RERATE, couple.pet_of_alice.id
+    )
+
+    assert changed == 0
+
+
+async def test_a_token_without_the_second_factor_rates_nothing(
+    couples: Couples,
+) -> None:
+    couple = await couples.create()
+    await add_event(couples, couple)
+    aal1 = couple.actor(couple.alice, aal="aal1").claims
+
+    with pytest.raises(Exception, match="row-level security"):
+        await as_authenticated(aal1, RATE, couple.id, couple.pet_of_alice.id)
+    assert await as_authenticated(aal1, RERATE, couple.pet_of_alice.id) == 0
+
+
+async def test_a_couple_never_rates_another_couples_pet(couples: Couples) -> None:
+    ours = await couples.create()
+    theirs = await couples.create()
+    await add_event(couples, theirs)
+    claims = ours.actor(ours.alice).claims
+
+    with pytest.raises(Exception, match="row-level security"):
+        await as_authenticated(claims, RATE, theirs.id, theirs.pet_of_alice.id)
+    assert await as_authenticated(claims, RERATE, theirs.pet_of_alice.id) == 0
