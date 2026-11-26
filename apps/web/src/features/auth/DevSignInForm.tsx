@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { devTexts, texts } from "../../shared";
 import type { AuthPort } from "./authPort";
+import styles from "./DevSignInForm.module.css";
 import { GATE_KEY } from "./gateQuery";
 
 type PasswordSignIn = NonNullable<AuthPort["signInWithPassword"]>;
@@ -27,13 +28,14 @@ export function DevSignInForm({ signIn }: { signIn: PasswordSignIn }) {
   const attempt = usePasswordSignIn(signIn);
   return (
     <form
+      className={styles.form}
       onSubmit={(event) => {
         event.preventDefault();
         attempt.mutate({ email, password });
       }}
     >
-      <h2>{devTexts.title}</h2>
-      <label>
+      <h2 className={styles.title}>{devTexts.title}</h2>
+      <label className={styles.field}>
         {devTexts.email}
         <input
           type="email"
@@ -45,7 +47,7 @@ export function DevSignInForm({ signIn }: { signIn: PasswordSignIn }) {
           }}
         />
       </label>
-      <label>
+      <label className={styles.field}>
         {devTexts.password}
         <input
           type="password"
@@ -57,7 +59,7 @@ export function DevSignInForm({ signIn }: { signIn: PasswordSignIn }) {
           }}
         />
       </label>
-      <button type="submit" disabled={attempt.isPending}>
+      <button type="submit" className={styles.submit} disabled={attempt.isPending}>
         {devTexts.submit}
       </button>
       {attempt.data === "wrong_credentials" && <p role="alert">{devTexts.wrongCredentials}</p>}

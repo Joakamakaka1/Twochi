@@ -1,19 +1,25 @@
 import { texts } from "../../shared";
-import { SignOutButton } from "./SignOutButton";
+import { AuthScreen } from "./AuthScreen";
+import styles from "./EnrollTotpScreen.module.css";
 import { TotpCodeForm } from "./TotpCodeForm";
 import { useTotpEnrollment } from "./useAuth";
 
 export function EnrollTotpScreen() {
   const enrollment = useTotpEnrollment();
   return (
-    <main>
-      <h1>{texts.auth.enrollTitle}</h1>
+    <AuthScreen title={texts.auth.enrollTitle} signOut>
       {enrollment.data !== undefined ? (
         <>
           <p>{texts.auth.enrollSteps}</p>
-          <img src={enrollment.data.qrCode} alt={texts.auth.enrollQrAlt} width={200} height={200} />
-          <p>
-            {texts.auth.enrollSecret} <code>{enrollment.data.secret}</code>
+          <img
+            className={styles.qr}
+            src={enrollment.data.qrCode}
+            alt={texts.auth.enrollQrAlt}
+            width={200}
+            height={200}
+          />
+          <p className={styles.secret}>
+            {texts.auth.enrollSecret} <code className={styles.key}>{enrollment.data.secret}</code>
           </p>
           <TotpCodeForm factorId={enrollment.data.factorId} />
         </>
@@ -27,7 +33,6 @@ export function EnrollTotpScreen() {
       ) : (
         <p>{texts.loading}</p>
       )}
-      <SignOutButton />
-    </main>
+    </AuthScreen>
   );
 }

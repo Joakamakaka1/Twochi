@@ -1,0 +1,25 @@
+/* Development only, and it looks it: a dashed card under the real sign-in. */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border: var(--border-width) dashed var(--color-line);
+  border-radius: var(--radius-lg);
+}
+
+.title {
+  font-size: var(--text-md);
+  color: var(--color-ink-soft);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.submit {
+  --button-fill: var(--color-secondary);
+  --button-edge: var(--color-secondary-edge);
+}

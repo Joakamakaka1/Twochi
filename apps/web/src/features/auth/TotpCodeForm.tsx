@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { texts } from "../../shared";
+import styles from "./TotpCodeForm.module.css";
 import { useTotpCode } from "./useAuth";
 
 export function TotpCodeForm({ factorId }: { factorId: string }) {
@@ -8,14 +9,16 @@ export function TotpCodeForm({ factorId }: { factorId: string }) {
   const code = useTotpCode(factorId);
   return (
     <form
+      className={styles.form}
       onSubmit={(event) => {
         event.preventDefault();
         code.submit(input);
       }}
     >
-      <label>
+      <label className={styles.field}>
         {texts.auth.code}
         <input
+          className={styles.code}
           inputMode="numeric"
           autoComplete="one-time-code"
           required
