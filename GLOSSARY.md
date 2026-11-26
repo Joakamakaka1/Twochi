@@ -53,10 +53,17 @@ El estado visible de la mascota, sacado de la media de sus necesidades: feliz, n
 _Evitar_: humor, felicidad
 
 **Enferma** (`sick`):
-El ánimo más bajo. Empieza cuando la media de las necesidades cae muy abajo y dura hasta que el cuidador devuelve todas a un nivel aceptable, aunque la media ya haya subido.
+El ánimo más bajo. Empieza cuando la media de las necesidades cae muy abajo y dura hasta que el cuidador devuelve todas a un nivel aceptable, aunque la media ya haya subido. Ponerse enferma (`fell_sick`) y curarse (`healed`) quedan anotados en el evento de la acción que lo provocó. Estar enferma no cambia ninguna regla: solo cómo se ve y lo que dice.
+
+**Bocadillo** (`Bubble`):
+Una frase corta que dice la mascota en Casa sin pasar por el chat, según su ánimo, lo que pide y lo que acaba de pasar. Es genérica: la voz de su persona la pone el chat.
+_Evitar_: mensaje, turno
+
+**Cosquillas** (`tickle`):
+La reacción a muchos toques seguidos sobre la mascota. Solo se ve: no cambia ninguna necesidad.
 
 **Acción de cuidado** (`CareAction`):
-Lo que hace el cuidador desde la interfaz para cambiar las necesidades: dar de comer, jugar, acariciar, bañar, dormir o despertar.
+Lo que hace el cuidador desde la interfaz para cambiar las necesidades: dar de comer una comida, jugar a una actividad, acariciar, bañar, dormir o despertar.
 _Evitar_: interacción
 
 **Rechazo** (`Rejection`):
@@ -68,8 +75,30 @@ Una caricia que sube el cariño. Con tres caricias efectivas en la última hora,
 **Acción** (`Action`):
 Un cambio de estado que el motor valida y aplica, venga de la interfaz o propuesto en el chat.
 
+**Catálogo** (`catalog`):
+Las comidas y las actividades que el cuidador puede elegir, las mismas para las dos mascotas y versionadas con las reglas del juego. En la v1 todas son gratis e ilimitadas.
+_Evitar_: tienda, inventario
+
+**Comida** (`food`):
+Un objeto del catálogo que se da en la cocina y sube el hambre.
+
+**Actividad** (`activity`):
+Un objeto del catálogo con el que se juega en el salón y sube la diversión.
+_Evitar_: juego (es el juego entero)
+
 **Afinidad** (`affinity`):
-Cuánto le gusta a una mascota un objeto del catálogo, de −2 a 2, según los gustos reales de su persona.
+Cuánto le gusta a una mascota una comida o una actividad, de −2 a 2. La pone la persona a la que representa; lo que no ha puntuado vale 0. Cuanto más le gusta, más sube la necesidad, y lo que le encanta también le da cariño.
+_Evitar_: preferencia, valoración
+
+**Gusto descubierto** (`discovered`):
+Una comida o una actividad que el cuidador ya ha dado a su mascota, con la reacción que vio entonces. El cuidador no ve la afinidad: la descubre cuidando.
+
+**Asco** (`disgust`):
+Lo que hace la mascota con una comida o una actividad que odia (afinidad −2): la acepta, le sube poco la necesidad y lo muestra con una reacción cómica. No es un rechazo: el motor sí aplica la acción.
+_Evitar_: rechazo cómico
+
+**Petición** (`asks`):
+Cuando una necesidad baja de 30, la mascota la pide en Casa. Ocurre dentro de la app; no es un aviso.
 
 **Evento** (`PetEvent`):
 El registro inmutable de algo que ocurrió a una mascota, del que salen el diario, las rachas y el álbum.
