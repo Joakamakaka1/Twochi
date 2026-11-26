@@ -71,6 +71,7 @@
 .item {
   --button-fill: var(--color-background);
   --button-edge: var(--color-quiet-edge);
+  position: relative;
   flex-direction: column;
   gap: var(--space-1);
   width: 100%;
@@ -82,6 +83,22 @@
 
 .itemIcon {
   font-size: var(--text-2xl);
+  line-height: 1;
+}
+
+/* The face of the last reaction seen, pinned to the item's corner. */
+.seen {
+  position: absolute;
+  top: calc(-1 * var(--space-2));
+  right: calc(-1 * var(--space-1));
+  display: grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-quiet-edge);
+  font-size: var(--text-md);
   line-height: 1;
 }
 

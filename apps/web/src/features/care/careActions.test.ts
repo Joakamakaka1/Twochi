@@ -71,7 +71,7 @@ const problem = (status: number, code: string) => () =>
 // as the mutation says, without the wait.
 function careFor(api: ReturnType<typeof createApi>) {
   const queryClient = new QueryClient();
-  queryClient.setQueryData<Home>(HOME_KEY, { pet: BRU });
+  queryClient.setQueryData<Home>(HOME_KEY, { pet: { ...BRU, discovered: { sushi: 2 } } });
   const observer = new MutationObserver(queryClient, { ...careActionMutation(api, BRU.id, queryClient), retryDelay: 0 });
   return { queryClient, observer };
 }
@@ -120,7 +120,7 @@ describe("care actions", () => {
 
     await observer.mutate(careTap("feed"));
 
-    expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: FED });
+    expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: { ...FED, discovered: { sushi: 2, pizza: 0 } } });
   });
 
   it("keeps the pet the response brings when the engine refuses", async () => {
@@ -132,7 +132,7 @@ describe("care actions", () => {
     await vi.waitFor(() => {
       expect(observer.getCurrentResult().isSuccess).toBe(true);
     });
-    expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: BRU });
+    expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: { ...BRU, discovered: { sushi: 2 } } });
     expect(observer.getCurrentResult().data).toEqual(tooTired);
   });
 

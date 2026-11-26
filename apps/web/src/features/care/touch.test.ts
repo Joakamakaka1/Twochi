@@ -86,7 +86,7 @@ function touchesOverTheApi() {
     },
   });
   const queryClient = new QueryClient();
-  queryClient.setQueryData<Home>(HOME_KEY, { pet: BRU });
+  queryClient.setQueryData<Home>(HOME_KEY, { pet: { ...BRU, discovered: {} } });
   const observer = new MutationObserver(queryClient, careActionMutation(api, BRU.id, queryClient));
   observer.subscribe(() => undefined);
   const onOutcome = vi.fn();

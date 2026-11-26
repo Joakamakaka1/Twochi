@@ -3,7 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { apiError, isAuthFailure, isStillWanted, LeftBehindError, retryApiWrite, texts } from "../../shared";
 import type { ApiClient, CareAction, CareActionResult, Home, ItemKey, Pet } from "../../shared";
-import { HOME_KEY } from "./home";
+import { HOME_KEY, homeAfterCare } from "./home";
 
 /**
  * One tap on a care button: its action, the item chosen in the tray when feeding or
@@ -57,7 +57,7 @@ export function careActionMutation(api: ApiClient, petId: Pet["id"], queryClient
     // Casa it was tapped from, and nowhere once that person has left.
     onSuccess: (result, _tap, sent) => {
       if (sent.home === undefined || currentHome(queryClient) !== sent.home) return;
-      queryClient.setQueryData<Home>(HOME_KEY, { pet: result.pet });
+      queryClient.setQueryData<Home>(HOME_KEY, (home) => homeAfterCare(home, result));
     },
   });
 }

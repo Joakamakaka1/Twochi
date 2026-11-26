@@ -3,6 +3,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import {
   ACTIVITIES,
+  AFFINITY_FACES,
   apiError,
   FOODS,
   isStillWanted,
@@ -115,12 +116,11 @@ export interface Face {
   label: string;
 }
 
-const FACE_ICONS: Readonly<Record<Affinity, string>> = { [-2]: "😖", [-1]: "🙁", 0: "😐", 1: "🙂", 2: "😍" };
 const AFFINITIES: readonly Affinity[] = [-2, -1, 0, 1, 2];
 
 export const FACES: readonly Face[] = AFFINITIES.map((affinity) => ({
   affinity,
-  icon: FACE_ICONS[affinity],
+  icon: AFFINITY_FACES[affinity],
   label: texts.tastes.faces[affinity],
 }));
 

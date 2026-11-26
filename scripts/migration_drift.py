@@ -1,0 +1,61 @@
+"""Whether the local database is behind the repo's migrations (TWO-59).
+
+A checkout that brings a migration from `main` without `just reset` leaves its database
+behind, and every test that reaches the new table fails on its own. The root conftest
+asks this module once, before the first test that uses the database, and stops the
+session with one message instead.
+
+Migrations compare by version and name, not by version alone: after a rebase renumbers
+a branch's migration, the slot's database still holds it under the number `main` took.
+"""
+
+import re
+from collections.abc import Iterable
+from dataclasses import dataclass
+
+# What the Supabase CLI applies from supabase/migrations: any other file it skips.
+_MIGRATION_FILE = re.compile(r"^(?P<migration>(?P<version>[0-9]+)_.*)\.sql$")
+
+
+@dataclass(frozen=True, slots=True)
+class MigrationDrift:
+    pending: tuple[str, ...]  # files in the repo the database has not applied
+    gone: tuple[str, ...]  # `<version>_<name>` applied, with no file in the repo
+
+    def message(self) -> str:
+        lines = ["The local database does not match supabase/migrations."]
+        if self.pending:
+            lines.append("Not applied: " + ", ".join(self.pending) + ".")
+        if self.gone:
+            lines.append(
+                "Applied but no longer in the repo: " + ", ".join(self.gone) + "."
+            )
+        lines.append("Rebuild it with `just reset`, then run the tests again.")
+        return "\n".join(lines)
+
+
+def migration_drift(
+    files: Iterable[str], applied: Iterable[str]
+) -> MigrationDrift | None:
+    """How `applied`, as `<version>_<name>`, differs from the migration `files`.
+
+    A bare `<version>` is a row whose name is empty (`supabase migration repair`, older
+    CLIs): it matches by version alone. None when the database holds exactly the
+    repo's migrations.
+    """
+    migrations = [match for file in files if (match := _MIGRATION_FILE.match(file))]
+    done = set(applied)
+    pending = tuple(
+        sorted(
+            match.string
+            for match in migrations
+            if match["migration"] not in done and match["version"] not in done
+        )
+    )
+    in_repo = {
+        match[group] for match in migrations for group in ("migration", "version")
+    }
+    gone = tuple(sorted(done - in_repo))
+    if not pending and not gone:
+        return None
+    return MigrationDrift(pending=pending, gone=gone)

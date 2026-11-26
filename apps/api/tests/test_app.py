@@ -733,3 +733,37 @@ def test_the_tastes_contract_names_the_catalogue() -> None:
     }
     assert tastes["additionalProperties"] is False
     assert "required" not in tastes
+
+
+# Gustos descubiertos: Casa shows the caretaker what they saw, never the tastes.
+
+
+@pytest.mark.anyio
+async def test_home_brings_the_tastes_discovered_with_the_pet(
+    couples: Couples, game: TestClient
+) -> None:
+    couple = await couples.create(updated_at=NOW)
+
+    response = home(game, token_of(couple, couple.bruno))
+
+    # What each item discovers is the use case's job (test_get_home.py).
+    assert response.json()["pet"]["discovered"] == {}
+
+
+def test_the_home_contract_names_the_catalogue_in_the_tastes_discovered() -> None:
+    verifier = TokenVerifier(
+        issuer=ISSUER, audience=AUDIENCE, signing_key=lambda _token: public_jwk()
+    )
+    app = create_app(verifier, db=PostgresDatabase(None), clock=FixedClock(NOW))
+    schemas: dict[str, Any] = app.openapi()["components"]["schemas"]
+
+    pet = schemas["HomeOut"]["properties"]["pet"]["anyOf"][0]["$ref"].split("/")[-1]
+    assert "discovered" in schemas[pet]["required"]
+    discovered = schemas[pet]["properties"]["discovered"]
+    assert discovered["additionalProperties"] is False
+    catalogue = [*schemas["FoodKey"]["enum"], *schemas["ActivityKey"]["enum"]]
+    assert discovered["properties"] == {
+        key: {"$ref": "#/components/schemas/Affinity"} for key in catalogue
+    }
+    # The care response's pet is the same as ever: its reaction is what discovers.
+    assert "discovered" not in schemas["PetOut"]["properties"]

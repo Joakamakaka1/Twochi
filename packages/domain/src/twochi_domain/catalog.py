@@ -41,6 +41,9 @@ class ActivityKey(StrEnum):
 # Every item of the catalogue, all free and unlimited in the v1.
 type ItemKey = FoodKey | ActivityKey
 
+# The whole catalogue, foods first, in the order the engine declares it.
+CATALOG: tuple[ItemKey, ...] = (*FoodKey, *ActivityKey)
+
 
 def item_key(value: str) -> ItemKey | None:
     """The item a stored key names, or None if the catalogue no longer holds it."""
