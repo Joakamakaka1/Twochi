@@ -35,16 +35,17 @@ repos:
       - id: ruff-format
       - id: ruff-check
   # Before a push, the whole `just check`, the same steps as CI (TWO-26): PR 9 was
-  # pushed with it failing. It checks the checkout, not the pushed refs, takes about
-  # three minutes, needs local Supabase (`just up`) and ends with `supabase db reset`.
-  # The rule is not to skip it; `git push --no-verify` only when this same tree has just
-  # passed `just check` in full.
+  # pushed with it failing. It takes about three minutes, needs local Supabase
+  # (`just up`) and ends with `supabase db reset`. Since it checks the checkout, the
+  # guard first refuses another ref than HEAD, a dirty tree and a worktree that would
+  # reset the main folder's database. The rule is not to skip it; `git push
+  # --no-verify` only when this same tree has just passed `just check` in full.
   - repo: local
     hooks:
       - id: just-check
         name: just check
         language: system
-        entry: just check
+        entry: uv run --locked python scripts/push_guard.py
         pass_filenames: false
         always_run: true
         stages: [pre-push]
