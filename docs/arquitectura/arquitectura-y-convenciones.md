@@ -252,7 +252,7 @@ Siete checks cubren las reglas mecánicas. Todos corren en `just check` y en CI,
 | Tipos | `pyright` estricto y `tsc` con `strict` |
 | Estilo, tiempo con zona, SQL sin formatear y `print` | `ruff`, con las familias de la sección de Python |
 | Capas del front e imports internos | ESLint: `no-restricted-imports` por carpeta; `eslint-plugin-boundaries` si se queda corto |
-| Título del PR | Un paso del check `flujo` valida Conventional Commits y el identificador; el identificador no se exige en triviales ni en PR de Dependabot |
+| Título y cuerpo del PR | Un paso del check `flujo` valida Conventional Commits y el identificador; el identificador no se exige en triviales ni en PR de Dependabot. Con identificador, el cuerpo declara su tamaño, que no puede ser trivial ni normal en zona delicada, y su revisión si no es trivial. Avisa sin fallar si cambia código de `apps/` o `packages/` sin ningún test |
 | Cobertura del dominio | `pytest --cov` con umbral solo en `twochi_domain` |
 
 El contrato de capas, tal como iría en `pyproject.toml`. En `import-linter`, `|` separa hermanos independientes: están en la misma capa y no pueden importarse entre sí ([Import Linter](https://import-linter.readthedocs.io/en/stable/contract_types/layers/)).
