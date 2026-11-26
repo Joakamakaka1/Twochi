@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { phrases } from "../../shared";
 import type { Affinity, CareAction, CareActionResult, ItemKey, Mood, Need, Pet, Rejection } from "../../shared";
-import { BUBBLE_MS, chooseBubble } from "./bubble";
+import { BUBBLE_MS, bubbleKey, chooseBubble } from "./bubble";
 import type { BubbleState, LastOutcome } from "./bubble";
 import { needBars } from "./needBars";
 
@@ -190,5 +190,24 @@ describe("the bubble's variety", () => {
     ];
 
     for (const list of lists) expect(list.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("the bubble's key", () => {
+  it("is new for each outcome, so the same phrase twice in a row is said again", () => {
+    const first = outcome("pet", { deltas: { affection: 0 } }, NOW);
+    const second = outcome("pet", { deltas: { affection: 0 } }, NOW + 1500);
+
+    expect(chooseBubble({ ...stateOf({}), now: NOW + 1500 }, second, FIRST)).toBe(
+      chooseBubble(stateOf({}), first, FIRST),
+    );
+    expect(bubbleKey(second, NOW + 1500)).not.toBe(bubbleKey(first, NOW));
+  });
+
+  it("is the state's once the outcome is over, the same with or without one", () => {
+    const fed = took("feed", "pizza", 1);
+
+    expect(bubbleKey(fed, NOW + BUBBLE_MS)).toBe(bubbleKey(null, NOW + BUBBLE_MS));
+    expect(bubbleKey(fed, NOW + BUBBLE_MS - 1)).not.toBe(bubbleKey(null, NOW));
   });
 });
