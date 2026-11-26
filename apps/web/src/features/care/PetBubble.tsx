@@ -2,8 +2,8 @@ import styles from "./PetBubble.module.css";
 
 /**
  * The speech bubble over the pet: the place where it talks in Casa. A status region that
- * is always there, so a screen reader announces each new text. Today it says how the pet
- * took the last care action; choosing what it says (GLOSSARY.md, «Bocadillo») is TWO-54's.
+ * is always there, so a screen reader announces each new text. What it says
+ * (GLOSSARY.md, «Bocadillo») is chooseBubble's.
  */
 export function PetBubble({ text }: { text: string | null }) {
   return (
