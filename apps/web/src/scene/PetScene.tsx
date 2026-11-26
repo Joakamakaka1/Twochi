@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { useImperativeHandle, useRef } from "react";
+import { memo, useImperativeHandle, useRef } from "react";
 import type { Ref } from "react";
 
 import { BACKDROPS } from "./backdrops";
@@ -31,7 +31,8 @@ const LOOK_AT = [0, 0.6, 0] as const;
 // Seams: a rigged GLB replaces PlaceholderPet reading the same `playing` ref (useGLTF and
 // useAnimations, cross-fading to actions[animation]); the room's real background replaces
 // RoomBackdrop.
-export function PetScene({ ref, backdrop, label, onTap }: PetSceneProps) {
+// Memoised: Casa re-renders every second for the need bars, and the scene needs none of it.
+export const PetScene = memo(function PetScene({ ref, backdrop, label, onTap }: PetSceneProps) {
   const playing = useRef<Playing>({ animation: "idle", startedAt: 0 });
   useImperativeHandle(
     ref,
@@ -44,7 +45,7 @@ export function PetScene({ ref, backdrop, label, onTap }: PetSceneProps) {
   );
 
   return (
-    <div role="img" aria-label={label} style={{ height: "min(50vh, 360px)", touchAction: "manipulation" }}>
+    <div role="img" aria-label={label} style={{ height: "100%", touchAction: "manipulation" }}>
       <Canvas
         gl={{ antialias: false }}
         dpr={[1, MAX_DPR]}
@@ -60,7 +61,7 @@ export function PetScene({ ref, backdrop, label, onTap }: PetSceneProps) {
       </Canvas>
     </div>
   );
-}
+});
 
 function RoomBackdrop({ backdrop }: { backdrop: Backdrop }) {
   const { wall, floor } = BACKDROPS[backdrop];

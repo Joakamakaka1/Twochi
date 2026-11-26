@@ -31,8 +31,10 @@ export function createStageDriver(): StageDriver {
   }
 
   return {
+    // A lazy scene arrives after the rest was decided: it starts with what is on stage.
     attach: (handle) => {
       scene = handle;
+      if (stage !== null) scene?.play(stage.playing);
     },
     rest: (animation) => {
       apply(stage === null ? openStage(animation) : changeRest(stage, animation));

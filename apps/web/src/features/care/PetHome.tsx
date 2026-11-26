@@ -1,7 +1,5 @@
-import { useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 
-import { PetScene } from "../../scene";
-import type { PetSceneHandle } from "../../scene";
 import { texts } from "../../shared";
 import type { Pet } from "../../shared";
 import { needBars } from "./needBars";
@@ -12,12 +10,22 @@ import { usePetStage } from "./usePetStage";
 
 const TICK_MS = 1000;
 
+// Three.js comes in its own chunk, after Casa's first paint.
+const PetScene = lazy(() => import("../../scene").then((scene) => ({ default: scene.PetScene })));
+// The scene's place on screen, kept while that chunk loads.
+const SCENE_HEIGHT = "min(50vh, 360px)";
+
 // Casa with a pet: its state, its needs going down live and the four rooms.
 export function PetHome({ pet }: { pet: Pet }) {
   const [room, setRoom] = useState<Room>("kitchen");
   const now = useNow(TICK_MS);
-  const scene = useRef<PetSceneHandle>(null);
-  const care = useCareActions(pet.id, usePetStage(pet, scene));
+  const { attach, react } = usePetStage(pet);
+  const care = useCareActions(pet.id, react);
+  const { tap } = care;
+  // Stable, so the memoised scene skips the bars' tick every second.
+  const petByTouch = useCallback(() => {
+    tap("pet");
+  }, [tap]);
   const actions = ROOMS.find((each) => each.room === room)?.actions ?? [];
 
   return (
@@ -27,14 +35,11 @@ export function PetHome({ pet }: { pet: Pet }) {
         {texts.care.moodIs(texts.care.moods[pet.mood])} · {pet.asleep ? texts.care.asleep : texts.care.awake}
       </p>
 
-      <PetScene
-        ref={scene}
-        backdrop={room}
-        label={texts.care.petFigure(pet.name)}
-        onTap={() => {
-          care.tap("pet");
-        }}
-      />
+      <div style={{ height: SCENE_HEIGHT }}>
+        <Suspense fallback={null}>
+          <PetScene ref={attach} backdrop={room} label={texts.care.petFigure(pet.name)} onTap={petByTouch} />
+        </Suspense>
+      </div>
 
       <section aria-labelledby="needs-title">
         <h2 id="needs-title">{texts.care.needsTitle}</h2>
