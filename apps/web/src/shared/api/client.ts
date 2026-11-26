@@ -1,3 +1,4 @@
+import type { MutationKey, QueryClient } from "@tanstack/react-query";
 import { createApiClient } from "@twochi/api-client";
 import type { ApiClient, components } from "@twochi/api-client";
 
@@ -70,11 +71,32 @@ export function retryApiRead(failureCount: number, error: unknown): boolean {
   return failureCount < RETRIES && !isAuthFailure(error);
 }
 
+// A write whose person has left: the gate emptied the mutation cache, and sending it
+// again would go out with the next person's token.
+export class LeftBehindError extends Error {
+  constructor() {
+    super("The person who made this write has left");
+    this.name = "LeftBehindError";
+  }
+}
+
+/**
+ * Whether a write is still in the mutation cache under `mutationKey`, with these very
+ * `variables`. Each attempt of a write checks it first, and fails with LeftBehindError
+ * when the gate has emptied the cache.
+ */
+export function isStillWanted(queryClient: QueryClient, mutationKey: MutationKey, variables: unknown): boolean {
+  return queryClient
+    .getMutationCache()
+    .findAll({ mutationKey })
+    .some((mutation) => mutation.state.variables === variables);
+}
+
 // A write is sent again, with its same idempotency key, only when the API may not have
 // applied it: a network failure or a 5xx. A duplicate never gets a 409: it waits on the
 // pet's lock and receives the stored result (ADR 0009). Any other refusal would get the
-// same answer again.
+// same answer again, and a write left behind by its person is never sent again.
 export function retryApiWrite(failureCount: number, error: unknown): boolean {
-  if (failureCount >= RETRIES) return false;
+  if (failureCount >= RETRIES || error instanceof LeftBehindError) return false;
   return !(error instanceof ApiError) || error.status >= 500;
 }

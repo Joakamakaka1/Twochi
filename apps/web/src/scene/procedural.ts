@@ -89,3 +89,13 @@ export function proceduralPose(animation: Animation, elapsed: number): Pose {
     eyes: motion.eyes,
   };
 }
+
+// A sick pet shivers; for whoever asks the system for less motion, it only sways a little.
+const SHIVER = { amplitude: 0.025, period: 0.1 };
+const CALM_SWAY = { amplitude: 0.006, period: 1.5 };
+
+/** The sideways offset a sick pet adds to its pose at `seconds` on a running clock. */
+export function sickTremble(seconds: number, reducedMotion: boolean): number {
+  const { amplitude, period } = reducedMotion ? CALM_SWAY : SHIVER;
+  return amplitude * wave(Math.max(seconds, 0), period);
+}

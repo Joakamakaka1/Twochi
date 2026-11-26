@@ -33,3 +33,12 @@ export function mostUrgent(bars: readonly NeedBar[]): Need | null {
   }
   return urgent?.need ?? null;
 }
+
+/** The need the pet lacks most, under 30 or not. A tie goes to the need shown first. */
+export function lowestNeed(bars: readonly NeedBar[]): Need {
+  let lowest: NeedBar | null = null;
+  for (const bar of bars) {
+    if (lowest === null || bar.value < lowest.value) lowest = bar;
+  }
+  return lowest?.need ?? "hunger";
+}
