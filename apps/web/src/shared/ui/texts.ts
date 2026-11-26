@@ -28,6 +28,8 @@ export const texts = {
     petArrivesWithPartner: "Tu mascota llegará cuando tu pareja se una.",
     moods: { happy: "Feliz", normal: "Normal", sad: "Triste", sick: "Enferma" },
     moodIs: (mood: string) => `Ánimo: ${mood}`,
+    // The 3D figure, for screen readers; petting it has its own button.
+    petFigure: (petName: string) => `${petName} en su casa`,
     asleep: "Está dormida",
     awake: "Está despierta",
     needsTitle: "Necesidades",

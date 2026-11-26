@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { PetScene } from "../../scene";
+import type { PetSceneHandle } from "../../scene";
 import { texts } from "../../shared";
 import type { Pet } from "../../shared";
 import { needBars } from "./needBars";
 import { ROOMS } from "./rooms";
 import type { Room } from "./rooms";
 import { useCareActions, useNow } from "./useHome";
+import { usePetStage } from "./usePetStage";
 
 const TICK_MS = 1000;
 
@@ -13,7 +16,8 @@ const TICK_MS = 1000;
 export function PetHome({ pet }: { pet: Pet }) {
   const [room, setRoom] = useState<Room>("kitchen");
   const now = useNow(TICK_MS);
-  const care = useCareActions(pet.id);
+  const scene = useRef<PetSceneHandle>(null);
+  const care = useCareActions(pet.id, usePetStage(pet, scene));
   const actions = ROOMS.find((each) => each.room === room)?.actions ?? [];
 
   return (
@@ -22,6 +26,15 @@ export function PetHome({ pet }: { pet: Pet }) {
       <p>
         {texts.care.moodIs(texts.care.moods[pet.mood])} · {pet.asleep ? texts.care.asleep : texts.care.awake}
       </p>
+
+      <PetScene
+        ref={scene}
+        backdrop={room}
+        label={texts.care.petFigure(pet.name)}
+        onTap={() => {
+          care.tap("pet");
+        }}
+      />
 
       <section aria-labelledby="needs-title">
         <h2 id="needs-title">{texts.care.needsTitle}</h2>
