@@ -1,0 +1,60 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-7);
+  min-height: 100dvh;
+  padding: max(var(--space-7), env(safe-area-inset-top)) var(--space-4)
+    max(var(--space-6), env(safe-area-inset-bottom));
+}
+
+/* Two soft blobs, one per pet, peeking out behind the name. */
+.hero {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 1;
+  width: 100%;
+  max-width: var(--column-width);
+  isolation: isolate;
+}
+
+.hero::before,
+.hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: calc(var(--space-7) * 3);
+  aspect-ratio: 1;
+  border-radius: 46% 54% 52% 48% / 55% 45% 55% 45%;
+}
+
+.hero::before {
+  translate: -32% -14%;
+  background: var(--color-blob-one);
+}
+
+.hero::after {
+  translate: 34% 12%;
+  background: var(--color-blob-two);
+}
+
+.wordmark {
+  font-size: var(--text-hero);
+  font-weight: var(--weight-hero);
+  letter-spacing: var(--tracking-hero);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  width: 100%;
+  max-width: var(--column-width);
+}
+
+.google {
+  width: 100%;
+  font-size: var(--text-lg);
+}
