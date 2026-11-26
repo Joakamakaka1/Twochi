@@ -1,54 +1,40 @@
 """`just check-pr-body`: a draft PR body judged as CI's `flujo` will judge it (TWO-26).
 
 It hands `flujo` what the CI job hands it: the changed files as `git diff --name-only
---no-renames -z` writes them, here against origin/main, and an event file with the
-title and the body. It runs origin/main's copy of flujo.py, as CI runs the base
-branch's, and this checkout's only while the base has none. So neither flujo.py nor
-CI change, and the verdict is CI's as long as origin/main is the PR's base.
+--no-renames -z` writes them, against the PR's base, and an event file with the title
+and the body. It runs the base's copy of flujo.py, as CI does, and this checkout's only
+while the base has none. So neither flujo.py nor CI change.
 
-The title defaults to the last commit's subject: commits follow the same convention as
-the PR title, and `gh pr create --fill` takes it from there on a one-commit branch. The
-branch name never fits the convention, so it would always fail. Pass the PR's real
-title when it differs.
+The base is a branch on origin: main, or the branch below for a stacked PR (`--base`).
+It is fetched first, so the verdict is against the base CI will see; without the
+network the last fetched copy stands in, with a warning.
 
-Usage: python check_pr_body.py BODY_FILE [TITLE]
+The title defaults to the subject of the last commit that is not a merge: commits
+follow the same convention as the PR title, and `gh pr create --fill` takes it from
+there on a one-commit branch. The branch name never fits the convention, so it would
+always fail. Pass the PR's real title when it differs.
+
+Usage: python check_pr_body.py BODY_FILE [TITLE] [--base BRANCH]
 """
 
+import argparse
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
+from git_env import git_environment
+
 ROOT = Path(__file__).resolve().parent.parent
-BASE = "origin/main"
+REMOTE = "origin"
+BASE = "main"
 FLUJO = ".github/scripts/flujo.py"
 # Any login but Dependabot's: flujo exempts that one from the id and the sections.
 AUTHOR = "local"
-# What git exports to a hook, as `git rev-parse --local-env-vars` lists it. Inherited,
-# GIT_DIR and its kin point every git command at the repository that runs the hook,
-# not at `repo`.
-_LOCAL_GIT_VARIABLES = frozenset(
-    {
-        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-        "GIT_CONFIG",
-        "GIT_CONFIG_PARAMETERS",
-        "GIT_CONFIG_COUNT",
-        "GIT_OBJECT_DIRECTORY",
-        "GIT_DIR",
-        "GIT_WORK_TREE",
-        "GIT_IMPLICIT_WORK_TREE",
-        "GIT_GRAFT_FILE",
-        "GIT_INDEX_FILE",
-        "GIT_NO_REPLACE_OBJECTS",
-        "GIT_REPLACE_REF_BASE",
-        "GIT_PREFIX",
-        "GIT_SHALLOW_FILE",
-        "GIT_COMMON_DIR",
-    }
-)
 
 
 class GitError(Exception):
@@ -62,7 +48,7 @@ def _git(repo: Path, *args: str) -> bytes:
     result = subprocess.run(  # noqa: S603 - git resolved on PATH, arguments built here
         [executable, "-c", "core.quotePath=false", *args],
         cwd=repo,
-        env={k: v for k, v in os.environ.items() if k not in _LOCAL_GIT_VARIABLES},
+        env=git_environment(),
         capture_output=True,
         check=False,
     )
@@ -70,6 +56,17 @@ def _git(repo: Path, *args: str) -> bytes:
         error = result.stderr.decode("utf-8", "replace").strip()
         raise GitError(f"git {' '.join(args)}: {error}")
     return result.stdout
+
+
+def _fetch(repo: Path, base: str) -> None:
+    """Bring origin's base up to date; without it, warn and keep the last copy."""
+    try:
+        _git(repo, "fetch", "--quiet", REMOTE, base)
+    except GitError as error:
+        sys.stderr.write(
+            f"Warning: could not fetch {REMOTE}/{base}, so the verdict may be against "
+            f"a stale base ({error}).\n"
+        )
 
 
 def _flujo_source(repo: Path, base: str) -> bytes:
@@ -86,10 +83,15 @@ def run(
     """Run `flujo` on the draft and print its verdict; its exit code is the result."""
     body = body_path.read_text(encoding="utf-8")
     if not title:
-        title = _git(repo, "log", "-1", "--format=%s").decode("utf-8").strip()
+        subject = _git(repo, "log", "-1", "--no-merges", "--format=%s")
+        title = subject.decode("utf-8").strip()
+    _fetch(repo, base)
+    tracked = f"{REMOTE}/{base}"
     # The same diff as CI's, but from the merge base: the branch's own changes.
-    changed = _git(repo, "diff", "--name-only", "--no-renames", "-z", f"{base}...HEAD")
-    flujo = _flujo_source(repo, base)
+    changed = _git(
+        repo, "diff", "--name-only", "--no-renames", "-z", f"{tracked}...HEAD"
+    )
+    flujo = _flujo_source(repo, tracked)
     sys.stdout.write(f"Title: {title}\n")
 
     with tempfile.TemporaryDirectory() as temp:
@@ -119,16 +121,26 @@ def run(
     return result.returncode
 
 
-def main(argv: list[str]) -> int:
-    if len(argv) not in (2, 3):
-        sys.stderr.write("usage: check_pr_body.py BODY_FILE [TITLE]\n")
-        return 2
-    body_path = Path(argv[1])
+def main(argv: Sequence[str], *, repo: Path = ROOT) -> int:
+    """`repo` is the checkout whose branch is judged: tests pass another."""
+    parser = argparse.ArgumentParser(prog="check_pr_body.py")
+    parser.add_argument("body", type=Path, help="the draft PR body, in Markdown")
+    parser.add_argument("title", nargs="?", help="the PR title")
+    parser.add_argument(
+        "--base",
+        default=BASE,
+        help="the PR's base branch on origin: main, or the one below a stacked PR",
+    )
+    try:
+        args = parser.parse_args(argv[1:])
+    except SystemExit as stop:
+        return stop.code if isinstance(stop.code, int) else 2
+    body_path: Path = args.body
     if not body_path.is_file():
         sys.stderr.write(f"No body file at {body_path}.\n")
         return 2
     try:
-        return run(body_path, argv[2] if len(argv) == 3 else None)
+        return run(body_path, args.title, base=args.base, repo=repo)
     except GitError as error:
         sys.stderr.write(f"{error}\n")
         return 2

@@ -66,10 +66,11 @@ check-infra:
     node --test "infra/**/*.test.mjs"
 
 # The draft PR body in FILE as CI's `flujo` will judge it (TWO-26): the files changed
-# against origin/main, origin/main's flujo.py and the title, by default the last commit's
-# subject. Run it before `gh pr create`, with the PR's title when it differs.
+# against the base, fetched from origin, the base's flujo.py and the title, by default
+# the last non-merge commit's subject. Run it before `gh pr create`, with the PR's title
+# when it differs: `just check-pr-body FILE "TITLE"`. A stacked PR adds `--base BRANCH`.
 [positional-arguments]
-check-pr-body file *title:
+check-pr-body file *args:
     uv run --locked python scripts/check_pr_body.py "$@"
 
 # Regenerate the OpenAPI document from the API, and the front's types from it. A test in
