@@ -6,7 +6,6 @@ from uuid import UUID
 import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
-from twochi_domain.catalog import CATALOG, Affinity, InvalidItemError, ItemKey, ItemKind
 
 from twochi_domain.care import (
     RULES_VERSION,
@@ -19,6 +18,7 @@ from twochi_domain.care import (
     apply_care,
     checked_item,
 )
+from twochi_domain.catalog import CATALOG, Affinity, InvalidItemError, ItemKey, ItemKind
 from twochi_domain.ids import CoupleId, PetId, UserId
 from twochi_domain.needs import Need, NeedState
 from twochi_domain.pet import Pet, read_pet
