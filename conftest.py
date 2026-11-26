@@ -6,6 +6,7 @@ couple that isolates people also isolates tests and lets them run in parallel.
 """
 
 import asyncio
+import functools
 import json
 import os
 import tomllib
@@ -16,6 +17,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from migration_drift import migration_drift
 from slot import require_own_config
 
 from twochi_application.actors import UserActor
@@ -72,6 +74,58 @@ _URLS = database_urls(
 ADMIN_URL = _URLS.admin
 API_URL = _URLS.api
 BACKUP_URL = _URLS.backup
+
+
+def _uses_database(item: pytest.Item) -> bool:
+    """A test that takes `couples` or whose module imports one of the URLs above."""
+    if "couples" in getattr(item, "fixturenames", ()):
+        return True
+    module = getattr(item, "module", None)
+    names = vars(module) if module is not None else {}
+    return any(url in names for url in ("ADMIN_URL", "API_URL", "BACKUP_URL"))
+
+
+async def _applied_migrations() -> list[str]:
+    admin = await connect(ADMIN_URL)
+    try:
+        rows = await admin.fetch(
+            "select version, name from supabase_migrations.schema_migrations"
+        )
+    finally:
+        await admin.close()
+    # An empty name matches by version alone (see migration_drift).
+    return [
+        f"{row['version']}_{row['name']}" if row["name"] else str(row["version"])
+        for row in rows
+    ]
+
+
+@functools.cache
+def _database_drift() -> str | None:
+    """Why the database is not the repo's (TWO-59), asked once per session.
+
+    None too when the database cannot answer, whatever the reason (down, still
+    starting, no CLI migrations table): the check is a shortcut, and without it the
+    tests report what they find, as before. Returning instead of raising also lets
+    the cache keep the answer, so a failure is not repeated before every test.
+    """
+    try:
+        applied = asyncio.run(
+            _applied_migrations(), loop_factory=asyncio.SelectorEventLoop
+        )
+    except Exception:
+        return None
+    files = (path.name for path in (_CHECKOUT / "supabase" / "migrations").iterdir())
+    drift = migration_drift(files, applied)
+    return drift.message() if drift else None
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    # Before the first test that uses the database, not at collection: the tests that
+    # do not touch it keep running without local Supabase.
+    if _uses_database(item) and (drift := _database_drift()):
+        pytest.exit(drift, returncode=pytest.ExitCode.TESTS_FAILED)
 
 
 @pytest.fixture
