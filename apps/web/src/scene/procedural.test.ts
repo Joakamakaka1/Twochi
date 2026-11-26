@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ANIMATIONS } from "./clips";
 import type { Animation } from "./clips";
-import { proceduralPose } from "./procedural";
+import { proceduralPose, sickTremble } from "./procedural";
 
 // The pose sampled at 60 frames a second, from `from` to `to` seconds after play.
 function frames(animation: Animation, from: number, to: number) {
@@ -112,5 +112,40 @@ describe("proceduralPose", () => {
         expect(Number.isFinite(value), animation).toBe(true);
       }
     }
+  });
+});
+
+// The tremble sampled at 60 frames a second for `seconds` seconds.
+function trembling(seconds: number, reducedMotion: boolean) {
+  const sways = [];
+  for (let t = 0; t <= seconds; t += 1 / 60) sways.push(sickTremble(t, reducedMotion));
+  return sways;
+}
+
+// Times a sideways motion turns back, per second.
+function turnsPerSecond(sways: readonly number[], seconds: number) {
+  let turns = 0;
+  for (let i = 2; i < sways.length; i += 1) {
+    const before = (sways[i - 1] ?? 0) - (sways[i - 2] ?? 0);
+    const now = (sways[i] ?? 0) - (sways[i - 1] ?? 0);
+    if (before * now < 0) turns += 1;
+  }
+  return turns / seconds;
+}
+
+describe("sickTremble", () => {
+  it("shakes a sick pet quickly and visibly", () => {
+    const sways = trembling(4, false);
+
+    expect(Math.max(...sways.map(Math.abs))).toBeGreaterThanOrEqual(0.02);
+    expect(turnsPerSecond(sways, 4)).toBeGreaterThanOrEqual(8);
+  });
+
+  it("softens into a slow, small sway for whoever asks for less motion", () => {
+    const calm = trembling(4, true);
+    const shaking = trembling(4, false);
+
+    expect(Math.max(...calm.map(Math.abs))).toBeLessThanOrEqual(Math.max(...shaking.map(Math.abs)) / 3);
+    expect(turnsPerSecond(calm, 4)).toBeLessThanOrEqual(2);
   });
 });

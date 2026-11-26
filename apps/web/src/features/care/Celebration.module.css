@@ -1,0 +1,58 @@
+/* Around the pet, over the scene; taps go through to the figure. */
+.burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Each piece pops out from the pet to its place. Only a `from` keyframe: when motion is
+   reduced (base.css), the piece is simply there. */
+.piece {
+  position: absolute;
+  font-size: var(--text-2xl);
+  translate: -50% -50%;
+  animation: burst calc(var(--motion-quick) * 6) var(--motion-ease) both;
+}
+
+.piece:nth-child(1) {
+  top: 30%;
+  left: 18%;
+}
+
+.piece:nth-child(2) {
+  top: 18%;
+  left: 38%;
+  animation-delay: var(--motion-quick);
+}
+
+.piece:nth-child(3) {
+  top: 18%;
+  left: 62%;
+  animation-delay: calc(var(--motion-quick) * 2);
+}
+
+.piece:nth-child(4) {
+  top: 30%;
+  left: 82%;
+  animation-delay: var(--motion-quick);
+}
+
+.piece:nth-child(5) {
+  top: 55%;
+  left: 12%;
+  animation-delay: calc(var(--motion-quick) * 2);
+}
+
+.piece:nth-child(6) {
+  top: 55%;
+  left: 88%;
+}
+
+@keyframes burst {
+  from {
+    top: 60%;
+    left: 50%;
+    opacity: 0;
+    scale: 0.3;
+  }
+}

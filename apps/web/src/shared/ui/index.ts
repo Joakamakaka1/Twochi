@@ -2,6 +2,7 @@
 import "./tokens.css";
 import "./base.css";
 
+export { phrases } from "./phrases";
 export { ITEM_ICONS } from "./itemIcons";
 export { ACTIVITIES, FOODS } from "./catalogue";
 export { devTexts, texts } from "./texts";
