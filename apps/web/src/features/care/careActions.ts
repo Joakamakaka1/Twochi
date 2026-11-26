@@ -50,6 +50,60 @@ export function careActionMutation(api: ApiClient, petId: Pet["id"], queryClient
   });
 }
 
+/** The care-action mutation as Casa's taps use it: useMutation's `mutate` and `reset`. */
+export interface CareMutation {
+  mutate: (
+    tap: CareTap,
+    callbacks: { onSuccess: (result: CareActionResult) => void; onSettled: () => void },
+  ) => void;
+  reset: () => void;
+}
+
+/** Casa's care taps, the button's and the figure's, over the mutation. */
+export interface CareTaps {
+  tap: (action: CareAction) => void;
+  /** The tap that failed, sent again with its own key. */
+  retry: () => void;
+  /** Casa was read again from the API (see onHomeRead). */
+  homeRead: () => void;
+}
+
+/**
+ * One tap in flight at a time: the figure and the button can land in the same task,
+ * before a render disables the buttons. `onOutcome` hears each tap the engine applied
+ * or refused.
+ */
+export function careTaps(mutation: CareMutation, onOutcome: (action: CareAction, result: CareActionResult) => void): CareTaps {
+  let inFlight = false;
+  let last: CareTap | undefined;
+  const send = (tap: CareTap) => {
+    inFlight = true;
+    last = tap;
+    mutation.mutate(tap, {
+      onSuccess: (result) => {
+        onOutcome(tap.action, result);
+      },
+      onSettled: () => {
+        inFlight = false;
+      },
+    });
+  };
+  return {
+    tap: (action) => {
+      if (!inFlight) send(careTap(action));
+    },
+    retry: () => {
+      if (!inFlight && last !== undefined) send(last);
+    },
+    // The reset clears a refusal's text, which is about the pet before this read. A tap
+    // in flight has no text yet, and resetting would detach it: its reaction and the end
+    // of the lock would never arrive.
+    homeRead: () => {
+      if (!inFlight) mutation.reset();
+    },
+  };
+}
+
 /** What Casa says after a tap: why the engine refused it, or nothing. */
 export function careOutcomeText(result: CareActionResult | undefined): string | null {
   if (result?.rejection == null) return null;

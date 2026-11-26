@@ -12,6 +12,12 @@ const deepImport = {
   message: "Import the folder through its index.ts, not its internal files.",
 };
 
+// Three.js and React Three Fiber live in scene; the rest drives it through play(animation).
+const sceneLibraries = {
+  regex: String.raw`^(three|@react-three/[^/]+)(/|$)`,
+  message: "Only scene imports Three.js or React Three Fiber: drive the pet through PetSceneHandle.play.",
+};
+
 function restrictImports(files, patterns) {
   return { files, rules: { "no-restricted-imports": ["error", { patterns }] } };
 }
@@ -28,7 +34,8 @@ function upwardImports(layer) {
 }
 
 function layerImports(layer) {
-  return restrictImports([`src/${layer}/**/*.{ts,tsx}`], [deepImport, ...upwardImports(layer)]);
+  const libraries = layer === "scene" ? [] : [sceneLibraries];
+  return restrictImports([`src/${layer}/**/*.{ts,tsx}`], [deepImport, ...upwardImports(layer), ...libraries]);
 }
 
 // A feature never imports another one: what they share goes down to shared or is composed in app.
@@ -44,6 +51,7 @@ const crossFeatureImports = [1, 2, 3, 4].map((depth) =>
         message: "A feature cannot import another feature: move the shared part to shared or compose it in app.",
       },
       ...upwardImports("features"),
+      sceneLibraries,
     ],
   ),
 );
@@ -63,7 +71,7 @@ export default defineConfig([
     },
   },
   // Entry files at the root of src, such as main.tsx.
-  restrictImports(["src/*.{ts,tsx}"], [deepImport]),
+  restrictImports(["src/*.{ts,tsx}"], [deepImport, sceneLibraries]),
   ...LAYERS.map(layerImports),
   ...crossFeatureImports,
   // Network (Arquitectura y convenciones, «Convenciones del front»): supabase-js only in the
