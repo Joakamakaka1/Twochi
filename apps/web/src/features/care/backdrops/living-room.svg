@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500">
+  <!-- Placeholder living room: a sofa, a rug, a plant and a picture. The real art replaces this file in roomBackdrop.ts. -->
+  <defs>
+    <pattern id="stripes" width="40" height="40" patternUnits="userSpaceOnUse">
+      <rect width="40" height="40" fill="#e4f3d9"/>
+      <rect width="14" height="40" fill="#d9eecb"/>
+    </pattern>
+    <pattern id="boards" width="120" height="30" patternUnits="userSpaceOnUse">
+      <rect width="120" height="30" fill="#e8cfa8"/>
+      <path d="M0 29H120M60 0V30" stroke="#d6b88c" stroke-width="3"/>
+    </pattern>
+  </defs>
+  <rect width="600" height="310" fill="url(#stripes)"/>
+  <rect y="310" width="600" height="190" fill="url(#boards)"/>
+  <rect y="300" width="600" height="14" fill="#cfae84"/>
+  <!-- Picture -->
+  <rect x="236" y="40" width="128" height="88" rx="10" fill="#fff8ee" stroke="#cfae84" stroke-width="8"/>
+  <path d="M248 118l36-40 26 26 16-14 30 28z" fill="#bfe8d4"/>
+  <circle cx="336" cy="64" r="10" fill="#ffe27a"/>
+  <!-- Sofa -->
+  <rect x="130" y="176" width="340" height="96" rx="36" fill="#c9b6f5"/>
+  <rect x="100" y="220" width="70" height="110" rx="30" fill="#b7a0ee"/>
+  <rect x="430" y="220" width="70" height="110" rx="30" fill="#b7a0ee"/>
+  <rect x="150" y="250" width="300" height="70" rx="22" fill="#d8c9fa"/>
+  <path d="M300 256v58" stroke="#c9b6f5" stroke-width="5"/>
+  <rect x="140" y="326" width="16" height="22" rx="6" fill="#a5795a"/>
+  <rect x="444" y="326" width="16" height="22" rx="6" fill="#a5795a"/>
+  <rect x="180" y="200" width="70" height="56" rx="20" fill="#f7c4d4" transform="rotate(-10 215 228)"/>
+  <rect x="356" y="200" width="70" height="56" rx="20" fill="#fff0b8" transform="rotate(10 391 228)"/>
+  <!-- Rug -->
+  <ellipse cx="300" cy="400" rx="210" ry="56" fill="#f9d6e3"/>
+  <ellipse cx="300" cy="400" rx="168" ry="40" fill="none" stroke="#ffffff" stroke-width="6" stroke-dasharray="14 12"/>
+  <!-- Plant -->
+  <path d="M40 330h60l-8 50H48z" fill="#f4a86b"/>
+  <path d="M70 330c-30-40-40-90-20-120 10 30 18 60 20 120zM70 330c10-50 30-90 60-100-6 40-26 76-60 100zM70 330c-20-30-50-40-70-36 16 20 40 34 70 36z" fill="#94d4b8"/>
+  <!-- Floor lamp -->
+  <path d="M556 360V170" stroke="#a5795a" stroke-width="8" stroke-linecap="round"/>
+  <path d="M520 172h72l-14-56h-44z" fill="#fff0b8" stroke="#f2d48a" stroke-width="4"/>
+  <ellipse cx="556" cy="362" rx="28" ry="8" fill="#a5795a"/>
+</svg>

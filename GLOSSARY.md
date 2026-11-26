@@ -101,7 +101,7 @@ Lo que hace la mascota con una comida o una actividad que odia (afinidad −2): 
 _Evitar_: rechazo cómico
 
 **Petición** (`asks`):
-Cuando una necesidad baja de 30, la mascota la pide en Casa. Ocurre dentro de la app; no es un aviso.
+Cuando una necesidad baja de 30, la mascota la pide en Casa. Ocurre dentro de la app; no es un aviso. Si pide varias, la **más urgente** (`mostUrgent`) es la más baja, y a igualdad la primera en el orden de las necesidades; Casa la destaca.
 
 **Evento** (`PetEvent`):
 El registro inmutable de algo que ocurrió a una mascota, del que salen el diario, las rachas y el álbum.
