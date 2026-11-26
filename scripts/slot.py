@@ -287,6 +287,17 @@ def _is_listed(main: Path, folder: Path) -> bool:
     )
 
 
+def _has_own_git(folder: Path) -> bool:
+    """Whether `folder` holds a repository: a `.git` folder, or a `.git` file whose
+    `gitdir:` still exists. Git stops removing at the first held file, so leftovers may
+    keep a `.git` file that points at the admin folder git already dropped."""
+    dot_git = folder / ".git"
+    if not dot_git.is_file():
+        return dot_git.exists()
+    gitdir = dot_git.read_text(encoding="utf-8").strip().removeprefix("gitdir:")
+    return (folder / gitdir.strip()).exists()
+
+
 def up(slot: int, branch: str) -> None:
     if branch.startswith("-"):
         raise SlotError(f"`{branch}` is not a branch name.")
@@ -351,8 +362,8 @@ def down(slot: int, *, force: bool, checkout: Path) -> None:
     # A folder git no longer lists is what a failed removal left: on Windows, git drops
     # the worktree and exits with an error when a process holds one of its files.
     listed = folder.exists() and _is_listed(main, folder)
-    if folder.exists() and not listed and (folder / ".git").exists():
-        # Leftovers have no `.git`: git deletes it first. This one may hold work.
+    if folder.exists() and not listed and _has_own_git(folder):
+        # Not what a failed removal leaves: this one may hold work.
         raise SlotError(
             f"{folder} is not a worktree of {main} and has its own `.git`: remove it "
             "by hand."
