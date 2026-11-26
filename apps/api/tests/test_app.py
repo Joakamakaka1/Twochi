@@ -537,7 +537,8 @@ def test_the_contract_names_every_item_of_the_catalogue() -> None:
     app = create_app(verifier, db=PostgresDatabase(None), clock=FixedClock(NOW))
     schemas: dict[str, Any] = app.openapi()["components"]["schemas"]
 
-    assert set(schemas["ItemKey"]["enum"]) == {
+    # Foods and activities apart, so the front's trays are typed by their kind.
+    assert schemas["FoodKey"]["enum"] == [
         "tortilla",
         "paella",
         "pizza",
@@ -550,12 +551,23 @@ def test_the_contract_names_every_item_of_the_catalogue() -> None:
         "strawberries",
         "ice_cream",
         "chocolate",
+    ]
+    assert schemas["ActivityKey"]["enum"] == [
         "ball",
         "video_games",
         "dance",
         "reading",
         "drawing",
         "puzzle",
-    }
+    ]
+    item_key = (
+        {"$ref": "#/components/schemas/FoodKey"},
+        {"$ref": "#/components/schemas/ActivityKey"},
+    )
+    for where in (schemas["CareActionIn"], schemas["ReactionOut"]):
+        refs = [
+            kind for kind in where["properties"]["item_key"]["anyOf"] if "$ref" in kind
+        ]
+        assert tuple(refs) == item_key
     assert schemas["Affinity"]["enum"] == [-2, -1, 0, 1, 2]
     assert schemas["SicknessChange"]["enum"] == ["fell_sick", "healed"]
