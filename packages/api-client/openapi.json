@@ -495,7 +495,7 @@
           "pet": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PetOut"
+                "$ref": "#/components/schemas/HomePetOut"
               },
               {
                 "type": "null"
@@ -509,6 +509,116 @@
         ],
         "title": "HomeOut",
         "description": "The pet the caller cares for, or null until both people have arrived."
+      },
+      "HomePetOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "model_key": {
+            "type": "string",
+            "title": "Model Key"
+          },
+          "asleep": {
+            "type": "boolean",
+            "title": "Asleep"
+          },
+          "mood": {
+            "$ref": "#/components/schemas/Mood"
+          },
+          "needs": {
+            "$ref": "#/components/schemas/NeedsOut"
+          },
+          "discovered": {
+            "properties": {
+              "tortilla": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "paella": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "pizza": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "burger": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "sushi": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "pasta": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "tacos": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "salad": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "broccoli": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "strawberries": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "ice_cream": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "chocolate": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "ball": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "video_games": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "dance": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "reading": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "drawing": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "puzzle": {
+                "$ref": "#/components/schemas/Affinity"
+              }
+            },
+            "additionalProperties": false,
+            "propertyNames": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FoodKey"
+                },
+                {
+                  "$ref": "#/components/schemas/ActivityKey"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Discovered"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "model_key",
+          "asleep",
+          "mood",
+          "needs",
+          "discovered"
+        ],
+        "title": "HomePetOut",
+        "description": "The pet the caller cares for, with the tastes they discovered: for each item they\ngave, the affinity seen the last time. Never the pet's tastes (ADR 0015)."
       },
       "Mood": {
         "type": "string",

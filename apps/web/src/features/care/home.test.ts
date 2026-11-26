@@ -2,8 +2,8 @@ import { QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, AUTH_HEADER, createApi, isAuthFailure, texts } from "../../shared";
-import type { Home, Pet, VisibilitySource } from "../../shared";
-import { homeHeadline, homeQuery, readHome, refreshHomeOnForeground } from "./home";
+import type { CareActionResult, Home, Pet, VisibilitySource } from "../../shared";
+import { homeAfterCare, homeHeadline, homeQuery, readHome, refreshHomeOnForeground } from "./home";
 
 const BRU_PET: Pet = {
   id: "00000000-0000-4000-8000-0000000fb20b",
@@ -20,7 +20,7 @@ const BRU_PET: Pet = {
   },
 };
 
-const BRU: Home = { pet: BRU_PET };
+const BRU: Home = { pet: { ...BRU_PET, discovered: {} } };
 
 // The API as a function: records what it was sent and answers what the test says.
 function apiAnswering(answer: () => Response) {
@@ -127,7 +127,7 @@ class FakePage extends EventTarget implements VisibilitySource {
 
 describe("refreshHomeOnForeground", () => {
   it("reads Casa again from the API when the page comes back from the background", async () => {
-    const later: Home = { pet: { ...BRU_PET, asleep: true, mood: "normal" } };
+    const later: Home = { pet: { ...BRU_PET, asleep: true, mood: "normal", discovered: {} } };
     let answer: Home = BRU;
     const { api, sent } = apiAnswering(() => Response.json(answer));
     const queryClient = new QueryClient();
@@ -158,5 +158,42 @@ describe("refreshHomeOnForeground", () => {
     await Promise.resolve();
     expect(sent).toHaveLength(2);
     stopWatching();
+  });
+});
+
+describe("homeAfterCare", () => {
+  const fed: Pet = { ...BRU_PET, mood: "normal", needs: { ...BRU_PET.needs, hunger: { ...BRU_PET.needs.hunger, value: 90 } } };
+  const gave = (reaction: CareActionResult["reaction"]): CareActionResult => ({
+    applied: true,
+    rejection: null,
+    deltas: { hunger: 10 },
+    reaction,
+    sickness: null,
+    pet: fed,
+  });
+  const caring = (discovered: NonNullable<Home["pet"]>["discovered"]): Home => ({
+    pet: { ...BRU_PET, discovered },
+  });
+
+  it("brings the pet of the response, with the item given now discovered", () => {
+    const after = homeAfterCare(caring({ sushi: 2 }), gave({ item_key: "broccoli", affinity: -2 }));
+
+    expect(after).toEqual({ pet: { ...fed, discovered: { sushi: 2, broccoli: -2 } } });
+  });
+
+  it("replaces what was seen with an item when it is given again", () => {
+    const after = homeAfterCare(caring({ pizza: 2 }), gave({ item_key: "pizza", affinity: -1 }));
+
+    expect(after?.pet?.discovered).toEqual({ pizza: -1 });
+  });
+
+  it("keeps what was discovered when the response brings no reaction", () => {
+    const after = homeAfterCare(caring({ pizza: 2 }), { ...gave(null), applied: false, rejection: "asleep" });
+
+    expect(after).toEqual({ pet: { ...fed, discovered: { pizza: 2 } } });
+  });
+
+  it("leaves the cache alone when there was no Casa to update", () => {
+    expect(homeAfterCare(undefined, gave({ item_key: "ball", affinity: 0 }))).toBeUndefined();
   });
 });

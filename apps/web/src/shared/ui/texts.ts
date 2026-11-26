@@ -80,6 +80,10 @@ export const texts = {
     },
     trays: { feed: "¿Qué le das de comer?", play: "¿A qué jugáis?" },
     closeTray: "Cerrar",
+    // On an item in its tray, the reaction seen the last time it was given
+    // (GLOSSARY.md, «Gusto descubierto»): its face, and this for screen readers.
+    seen: { "2": "le encanta", "1": "le gusta", "0": "le da igual", "-1": "no le gusta", "-2": "le da asco" },
+    seenItem: (item: string, seen: string) => `${item}, ${seen}`,
   },
 } as const;
 
