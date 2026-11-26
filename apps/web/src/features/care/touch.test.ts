@@ -90,9 +90,12 @@ function touchesOverTheApi() {
   const observer = new MutationObserver(queryClient, careActionMutation(api, BRU.id, queryClient));
   observer.subscribe(() => undefined);
   const onOutcome = vi.fn();
+  // Every tap handed to the mutation, the only way to the API, as it is handed.
+  const mutated: string[] = [];
   const taps = careTaps(
     {
       mutate: (tap, callbacks) => {
+        mutated.push(tap.action);
         observer.mutate(tap, callbacks).catch(() => undefined);
       },
       reset: () => {
@@ -108,24 +111,30 @@ function touchesOverTheApi() {
     },
     tickle,
   });
-  return { sent, onOutcome, tickle, touch };
+  return { sent, mutated, onOutcome, tickle, touch };
 }
 
 describe("petTouches", () => {
   it("sends one petting for a burst, and tickles without any request to the API", async () => {
-    const { sent, onOutcome, tickle, touch } = touchesOverTheApi();
+    const { sent, mutated, onOutcome, tickle, touch } = touchesOverTheApi();
 
     touch(T0, false);
     await vi.waitFor(() => {
       expect(onOutcome).toHaveBeenCalledTimes(1);
     });
     for (const at of [T0 + 150, T0 + 300, T0 + 450, T0 + 600, T0 + 750]) touch(at, false);
-    // Give any request the tickles might have made the time to arrive.
-    await new Promise((settled) => setTimeout(settled, 20));
+    expect(mutated).toEqual(["pet"]);
+    // A petting after the burst: once it is heard, any request a tickle had made would
+    // have been sent before it.
+    touch(T0 + 2000, false);
+    await vi.waitFor(() => {
+      expect(onOutcome).toHaveBeenCalledTimes(2);
+    });
 
     expect(tickle).toHaveBeenCalledTimes(4);
-    expect(sent).toEqual([`POST https://twochi.test/api/pets/${BRU.id}/care-actions`]);
-    expect(onOutcome).toHaveBeenCalledTimes(1);
+    expect(mutated).toEqual(["pet", "pet"]);
+    const careActions = `POST https://twochi.test/api/pets/${BRU.id}/care-actions`;
+    expect(sent).toEqual([careActions, careActions]);
   });
 
   it("pets again, with its own request, once the burst is over", async () => {
