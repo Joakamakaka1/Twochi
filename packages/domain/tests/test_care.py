@@ -16,9 +16,16 @@ from twochi_domain.care import (
     Rejection,
     SicknessChange,
     apply_care,
-    checked_item,
+    check_item,
 )
-from twochi_domain.catalog import CATALOG, Affinity, InvalidItemError, ItemKey, ItemKind
+from twochi_domain.catalog import (
+    ActivityKey,
+    Affinity,
+    FoodKey,
+    InvalidItemError,
+    ItemKey,
+    item_key,
+)
 from twochi_domain.ids import CoupleId, PetId, UserId
 from twochi_domain.needs import Need, NeedState
 from twochi_domain.pet import Pet, read_pet
@@ -29,7 +36,7 @@ BRUNO = UserId(UUID("00000000-0000-4000-8000-00000000000b"))
 
 
 # What each test gives when the action needs an item: a food or an activity.
-ITEM = {CareAction.FEED: ItemKey.PIZZA, CareAction.PLAY: ItemKey.BALL}
+ITEM = {CareAction.FEED: FoodKey.PIZZA, CareAction.PLAY: ActivityKey.BALL}
 
 
 def hours(n: float) -> timedelta:
@@ -65,7 +72,7 @@ def test_feeding_adds_thirty_to_hunger() -> None:
     outcome = apply_care(
         pet(values={Need.HUNGER: 50}),
         CareAction.FEED,
-        item=ItemKey.PIZZA,
+        item=FoodKey.PIZZA,
         actor=BRUNO,
         now=T0,
         recent_effective_pets=0,
@@ -223,7 +230,7 @@ def test_tiredness_is_judged_at_now() -> None:
     outcome = apply_care(
         pet(values={Need.ENERGY: 12}),
         CareAction.PLAY,
-        item=ItemKey.BALL,
+        item=ActivityKey.BALL,
         actor=BRUNO,
         now=T0 + hours(1),
         recent_effective_pets=0,
@@ -316,8 +323,8 @@ def test_no_change_of_sickness_notes_nothing(
 
 
 def test_the_catalogue_holds_twelve_foods_and_six_activities() -> None:
-    foods = {key for key, kind in CATALOG.items() if kind is ItemKind.FOOD}
-    activities = {key for key, kind in CATALOG.items() if kind is ItemKind.ACTIVITY}
+    foods = {key.value for key in FoodKey}
+    activities = {key.value for key in ActivityKey}
 
     assert foods == {
         "tortilla",
@@ -341,7 +348,13 @@ def test_the_catalogue_holds_twelve_foods_and_six_activities() -> None:
         "drawing",
         "puzzle",
     }
-    assert set(CATALOG) == set(ItemKey)
+    assert foods.isdisjoint(activities)
+
+
+def test_a_stored_key_names_its_item_while_the_catalogue_holds_it() -> None:
+    assert item_key("pizza") is FoodKey.PIZZA
+    assert item_key("puzzle") is ActivityKey.PUZZLE
+    assert item_key("caviar") is None
 
 
 def test_the_rules_version_moved_on_with_the_tastes() -> None:
@@ -370,7 +383,7 @@ def test_a_food_raises_hunger_by_how_much_the_pet_likes_it(
         expected[Need.AFFECTION] = affection
     assert outcome.deltas == expected
     assert values_of(outcome.pet)[Need.HUNGER] == 50 + hunger
-    assert outcome.reaction == Reaction(item=ItemKey.PIZZA, affinity=affinity)
+    assert outcome.reaction == Reaction(item=FoodKey.PIZZA, affinity=affinity)
 
 
 @pytest.mark.parametrize(
@@ -394,14 +407,14 @@ def test_an_activity_raises_fun_by_how_much_the_pet_likes_it(
     if affection is not None:
         expected[Need.AFFECTION] = affection
     assert outcome.deltas == expected
-    assert outcome.reaction == Reaction(item=ItemKey.BALL, affinity=affinity)
+    assert outcome.reaction == Reaction(item=ActivityKey.BALL, affinity=affinity)
 
 
 def test_an_item_the_pet_was_never_rated_on_is_neutral() -> None:
     outcome = apply_care(
         pet(values={Need.HUNGER: 50}),
         CareAction.FEED,
-        item=ItemKey.SUSHI,
+        item=FoodKey.SUSHI,
         actor=BRUNO,
         now=T0,
         recent_effective_pets=0,
@@ -409,14 +422,14 @@ def test_an_item_the_pet_was_never_rated_on_is_neutral() -> None:
 
     assert isinstance(outcome, Applied)
     assert outcome.deltas == {Need.HUNGER: 30}
-    assert outcome.reaction == Reaction(item=ItemKey.SUSHI, affinity=Affinity.NEUTRAL)
+    assert outcome.reaction == Reaction(item=FoodKey.SUSHI, affinity=Affinity.NEUTRAL)
 
 
 def test_disgust_is_applied_not_refused() -> None:
     outcome = apply_care(
         pet(values={Need.HUNGER: 50}),
         CareAction.FEED,
-        item=ItemKey.BROCCOLI,
+        item=FoodKey.BROCCOLI,
         affinity=Affinity.HATES,
         actor=BRUNO,
         now=T0,
@@ -442,15 +455,21 @@ def test_actions_without_an_item_have_no_reaction(action: CareAction) -> None:
     assert apply(pet(), action).reaction is None
 
 
+def test_an_item_that_fits_the_action_passes_the_check() -> None:
+    check_item(CareAction.FEED, FoodKey.ICE_CREAM)
+    check_item(CareAction.PLAY, ActivityKey.PUZZLE)
+    check_item(CareAction.BATHE, None)
+
+
 @pytest.mark.parametrize(
     ("action", "item"),
     [
         (CareAction.FEED, None),
-        (CareAction.FEED, ItemKey.BALL),
+        (CareAction.FEED, ActivityKey.BALL),
         (CareAction.PLAY, None),
-        (CareAction.PLAY, ItemKey.PIZZA),
-        (CareAction.PET, ItemKey.PIZZA),
-        (CareAction.WAKE, ItemKey.BALL),
+        (CareAction.PLAY, FoodKey.PIZZA),
+        (CareAction.PET, FoodKey.PIZZA),
+        (CareAction.WAKE, ActivityKey.BALL),
     ],
     ids=[
         "feed-nothing",
@@ -465,32 +484,7 @@ def test_an_item_that_does_not_fit_the_action_is_an_error(
     action: CareAction, item: ItemKey | None
 ) -> None:
     with pytest.raises(InvalidItemError):
-        apply_care(
-            pet(), action, item=item, actor=BRUNO, now=T0, recent_effective_pets=0
-        )
-
-
-def test_an_item_key_is_checked_against_the_catalogue_and_the_action() -> None:
-    assert checked_item(CareAction.FEED, "ice_cream") is ItemKey.ICE_CREAM
-    assert checked_item(CareAction.PLAY, "puzzle") is ItemKey.PUZZLE
-    assert checked_item(CareAction.BATHE, None) is None
-
-
-@pytest.mark.parametrize(
-    ("action", "key"),
-    [
-        (CareAction.FEED, "caviar"),
-        (CareAction.FEED, "ball"),
-        (CareAction.FEED, None),
-        (CareAction.PET, "pizza"),
-    ],
-    ids=["unknown", "wrong-kind", "missing", "not-wanted"],
-)
-def test_an_item_key_that_does_not_fit_is_an_error(
-    action: CareAction, key: str | None
-) -> None:
-    with pytest.raises(InvalidItemError):
-        checked_item(action, key)
+        check_item(action, item)
 
 
 need_values = st.fixed_dictionaries(

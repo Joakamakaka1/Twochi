@@ -8,7 +8,7 @@ from twochi_api.home import PetOut, pet_out
 from twochi_application.actors import UserActor
 from twochi_application.care import ApplyCareAction, CareResult
 from twochi_domain.care import CareAction, Reaction, Rejection, SicknessChange
-from twochi_domain.catalog import Affinity, ItemKey
+from twochi_domain.catalog import ActivityKey, Affinity, FoodKey
 from twochi_domain.ids import PetId
 from twochi_domain.needs import Need
 
@@ -21,13 +21,13 @@ class CareActionIn(BaseModel):
     # here instead of failing in Postgres.
     idempotency_key: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
     # Required to feed (a food) and to play (an activity); forbidden in the rest.
-    item_key: ItemKey | None = None
+    item_key: FoodKey | ActivityKey | None = None
 
 
 class ReactionOut(BaseModel):
     """How the pet took what it was given: the item and its affinity right then."""
 
-    item_key: ItemKey
+    item_key: FoodKey | ActivityKey
     affinity: Affinity
 
 
@@ -53,7 +53,7 @@ def care_command(actor: UserActor, pet_id: UUID, body: CareActionIn) -> ApplyCar
         pet_id=PetId(pet_id),
         action=body.action,
         idempotency_key=body.idempotency_key,
-        item_key=None if body.item_key is None else body.item_key.value,
+        item_key=body.item_key,
     )
 
 

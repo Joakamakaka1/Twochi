@@ -7,10 +7,13 @@ import type { FetchLike, TokenSource } from "./signedFetch";
 export type { ApiClient, Home, Pet } from "@twochi/api-client";
 
 type Schemas = components["schemas"];
+export type ActivityKey = Schemas["ActivityKey"];
 export type Affinity = Schemas["Affinity"];
 export type CareAction = Schemas["CareAction"];
 export type CareActionResult = Schemas["CareActionOut"];
-export type ItemKey = Schemas["ItemKey"];
+export type FoodKey = Schemas["FoodKey"];
+// Every item of the catalogue: the contract keeps foods and activities apart.
+export type ItemKey = FoodKey | ActivityKey;
 export type Mood = Schemas["Mood"];
 export type Need = Schemas["Need"];
 export type Rejection = Schemas["Rejection"];

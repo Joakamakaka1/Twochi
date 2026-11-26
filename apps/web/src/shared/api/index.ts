@@ -1,11 +1,13 @@
 export { ApiProvider, useApi } from "./ApiProvider";
 export { ApiError, apiError, createApi, isAuthFailure, retryApiRead, retryApiWrite } from "./client";
 export type {
+  ActivityKey,
   Affinity,
   ApiClient,
   ApiOptions,
   CareAction,
   CareActionResult,
+  FoodKey,
   Home,
   ItemKey,
   Mood,

@@ -16,12 +16,14 @@ export {
   useApi,
 } from "./api";
 export type {
+  ActivityKey,
   Affinity,
   ApiClient,
   ApiOptions,
   CareAction,
   CareActionResult,
   FetchLike,
+  FoodKey,
   Home,
   ItemKey,
   Mood,

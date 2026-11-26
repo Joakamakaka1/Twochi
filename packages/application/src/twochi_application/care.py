@@ -14,9 +14,9 @@ from twochi_domain.care import (
     Rejection,
     SicknessChange,
     apply_care,
-    checked_item,
+    check_item,
 )
-from twochi_domain.catalog import Affinity
+from twochi_domain.catalog import Affinity, ItemKey
 from twochi_domain.errors import TwochiError
 from twochi_domain.ids import PetId
 from twochi_domain.needs import Need
@@ -34,7 +34,7 @@ class ApplyCareAction:
     pet_id: PetId
     action: CareAction
     idempotency_key: str
-    item_key: str | None = None
+    item_key: ItemKey | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +72,8 @@ async def apply_care_action(
     deciding it again on a retry is harmless. An item that does not fit the action
     raises InvalidItemError before anything is read.
     """
-    item = checked_item(cmd.action, cmd.item_key)
+    item = cmd.item_key
+    check_item(cmd.action, item)
     async with db.transaction(cmd.actor) as tx:
         pet = await tx.pets.lock(cmd.pet_id)
         if pet is None:

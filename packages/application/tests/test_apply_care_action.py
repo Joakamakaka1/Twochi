@@ -21,7 +21,13 @@ from twochi_application.testing import FixedClock
 from twochi_data.database import PostgresDatabase
 from twochi_data.events import UnexpectedPayloadError
 from twochi_domain.care import CareAction, Reaction, Rejection, SicknessChange
-from twochi_domain.catalog import Affinity, InvalidItemError, ItemKey
+from twochi_domain.catalog import (
+    ActivityKey,
+    Affinity,
+    FoodKey,
+    InvalidItemError,
+    ItemKey,
+)
 from twochi_domain.ids import PetId
 from twochi_domain.needs import Need
 
@@ -30,7 +36,10 @@ pytestmark = pytest.mark.anyio
 T0 = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
 
 # What the caretaker gives when the test does not say: a food or an activity.
-DEFAULT_ITEM = {CareAction.FEED: "pizza", CareAction.PLAY: "ball"}
+DEFAULT_ITEM: dict[CareAction, ItemKey] = {
+    CareAction.FEED: FoodKey.PIZZA,
+    CareAction.PLAY: ActivityKey.BALL,
+}
 
 
 @pytest.fixture
@@ -50,7 +59,7 @@ async def care(
     *,
     at: datetime = T0,
     key: str | None = None,
-    item: str | None = None,
+    item: ItemKey | None = None,
 ) -> CareResult:
     command = ApplyCareAction(
         actor=actor,
@@ -69,7 +78,7 @@ async def bruno_cares(
     *,
     at: datetime = T0,
     key: str | None = None,
-    item: str | None = None,
+    item: ItemKey | None = None,
 ) -> CareResult:
     """Bruno, the caretaker, acts on the pet that represents Alice."""
     actor = couple.actor(couple.bruno)
@@ -371,7 +380,7 @@ async def test_a_key_already_used_by_a_system_event_is_not_a_care_replay(
 
 
 async def rate(
-    couples: Couples, couple: TestCouple, pet_id: PetId, item: str, affinity: int
+    couples: Couples, couple: TestCouple, pet_id: PetId, item: ItemKey, affinity: int
 ) -> None:
     """Set a pet's affinity with an item, as the person it represents would."""
     await couples.admin.execute(
@@ -404,13 +413,13 @@ async def test_a_food_feeds_by_the_pets_affinity_with_it(
     couple = await couples.create(
         needs_of_alices_pet=dict.fromkeys(Need, 50), updated_at=T0
     )
-    await rate(couples, couple, couple.pet_of_alice.id, "tortilla", affinity)
+    await rate(couples, couple, couple.pet_of_alice.id, FoodKey.TORTILLA, affinity)
 
-    result = await bruno_cares(db, couple, CareAction.FEED, item="tortilla")
+    result = await bruno_cares(db, couple, CareAction.FEED, item=FoodKey.TORTILLA)
 
     assert result.applied
     assert result.deltas == deltas
-    assert result.reaction == Reaction(item=ItemKey.TORTILLA, affinity=affinity)
+    assert result.reaction == Reaction(item=FoodKey.TORTILLA, affinity=affinity)
     expected = {need: 50 + deltas.get(need, 0) for need in Need}
     assert await needs_seen_by_bruno(db, couple) == expected
 
@@ -434,12 +443,12 @@ async def test_an_activity_entertains_by_the_pets_affinity_with_it(
     couple = await couples.create(
         needs_of_alices_pet=dict.fromkeys(Need, 50), updated_at=T0
     )
-    await rate(couples, couple, couple.pet_of_alice.id, "dance", affinity)
+    await rate(couples, couple, couple.pet_of_alice.id, ActivityKey.DANCE, affinity)
 
-    result = await bruno_cares(db, couple, CareAction.PLAY, item="dance")
+    result = await bruno_cares(db, couple, CareAction.PLAY, item=ActivityKey.DANCE)
 
     assert result.deltas == deltas
-    assert result.reaction == Reaction(item=ItemKey.DANCE, affinity=affinity)
+    assert result.reaction == Reaction(item=ActivityKey.DANCE, affinity=affinity)
 
 
 async def test_an_item_never_rated_is_neutral(
@@ -447,38 +456,40 @@ async def test_an_item_never_rated_is_neutral(
 ) -> None:
     couple = await couples.create(needs_of_alices_pet={Need.HUNGER: 50}, updated_at=T0)
     # The other pet's taste is not this one's.
-    await rate(couples, couple, couple.pet_of_bruno.id, "sushi", Affinity.LOVES)
+    await rate(couples, couple, couple.pet_of_bruno.id, FoodKey.SUSHI, Affinity.LOVES)
 
-    result = await bruno_cares(db, couple, CareAction.FEED, item="sushi")
+    result = await bruno_cares(db, couple, CareAction.FEED, item=FoodKey.SUSHI)
 
     assert result.deltas == {Need.HUNGER: 30}
-    assert result.reaction == Reaction(item=ItemKey.SUSHI, affinity=Affinity.NEUTRAL)
+    assert result.reaction == Reaction(item=FoodKey.SUSHI, affinity=Affinity.NEUTRAL)
 
 
 async def test_disgust_is_applied(couples: Couples, db: PostgresDatabase) -> None:
     couple = await couples.create(needs_of_alices_pet={Need.HUNGER: 50}, updated_at=T0)
-    await rate(couples, couple, couple.pet_of_alice.id, "broccoli", Affinity.HATES)
+    await rate(
+        couples, couple, couple.pet_of_alice.id, FoodKey.BROCCOLI, Affinity.HATES
+    )
 
-    result = await bruno_cares(db, couple, CareAction.FEED, item="broccoli")
+    result = await bruno_cares(db, couple, CareAction.FEED, item=FoodKey.BROCCOLI)
 
     assert result.applied
     assert result.rejection is None
-    assert result.reaction == Reaction(item=ItemKey.BROCCOLI, affinity=Affinity.HATES)
+    assert result.reaction == Reaction(item=FoodKey.BROCCOLI, affinity=Affinity.HATES)
     assert (await needs_seen_by_bruno(db, couple))[Need.HUNGER] == 60
 
 
+# An item the catalogue does not hold never gets this far: the API's schema refuses it.
 @pytest.mark.parametrize(
     ("action", "item"),
     [
-        (CareAction.FEED, "caviar"),
-        (CareAction.FEED, "ball"),
-        (CareAction.PLAY, "pizza"),
-        (CareAction.BATHE, "pizza"),
+        (CareAction.FEED, ActivityKey.BALL),
+        (CareAction.PLAY, FoodKey.PIZZA),
+        (CareAction.BATHE, FoodKey.PIZZA),
     ],
-    ids=["unknown", "an-activity-to-eat", "a-food-to-play", "an-item-to-bathe"],
+    ids=["an-activity-to-eat", "a-food-to-play", "an-item-to-bathe"],
 )
 async def test_an_item_that_does_not_fit_is_an_input_error_and_changes_nothing(
-    couples: Couples, db: PostgresDatabase, action: CareAction, item: str
+    couples: Couples, db: PostgresDatabase, action: CareAction, item: ItemKey
 ) -> None:
     couple = await couples.create(updated_at=T0)
 
@@ -507,15 +518,19 @@ async def test_a_retry_returns_the_reaction_seen_the_first_time(
     couples: Couples, db: PostgresDatabase
 ) -> None:
     couple = await couples.create(updated_at=T0)
-    await rate(couples, couple, couple.pet_of_alice.id, "paella", Affinity.LOVES)
-    first = await bruno_cares(db, couple, CareAction.FEED, key="tap", item="paella")
+    await rate(couples, couple, couple.pet_of_alice.id, FoodKey.PAELLA, Affinity.LOVES)
+    first = await bruno_cares(
+        db, couple, CareAction.FEED, key="tap", item=FoodKey.PAELLA
+    )
     # Alice changes her mind between the tap and its retry.
-    await rate(couples, couple, couple.pet_of_alice.id, "paella", Affinity.HATES)
+    await rate(couples, couple, couple.pet_of_alice.id, FoodKey.PAELLA, Affinity.HATES)
 
-    retried = await bruno_cares(db, couple, CareAction.FEED, key="tap", item="paella")
+    retried = await bruno_cares(
+        db, couple, CareAction.FEED, key="tap", item=FoodKey.PAELLA
+    )
 
     assert retried.reaction == first.reaction
-    assert retried.reaction == Reaction(item=ItemKey.PAELLA, affinity=Affinity.LOVES)
+    assert retried.reaction == Reaction(item=FoodKey.PAELLA, affinity=Affinity.LOVES)
     assert retried.deltas == first.deltas
 
 
@@ -523,10 +538,10 @@ async def test_a_key_reused_for_another_item_is_refused(
     couples: Couples, db: PostgresDatabase
 ) -> None:
     couple = await couples.create(needs_of_alices_pet={Need.HUNGER: 20}, updated_at=T0)
-    await bruno_cares(db, couple, CareAction.FEED, key="reused", item="pizza")
+    await bruno_cares(db, couple, CareAction.FEED, key="reused", item=FoodKey.PIZZA)
 
     with pytest.raises(IdempotencyKeyReusedError):
-        await bruno_cares(db, couple, CareAction.FEED, key="reused", item="sushi")
+        await bruno_cares(db, couple, CareAction.FEED, key="reused", item=FoodKey.SUSHI)
 
     assert (await needs_seen_by_bruno(db, couple))[Need.HUNGER] == 50
 
@@ -580,4 +595,6 @@ async def test_a_stored_reaction_out_of_range_is_a_schema_drift_not_a_crash(
     )
 
     with pytest.raises(UnexpectedPayloadError):
-        await bruno_cares(db, couple, CareAction.FEED, key="drifted", item="pizza")
+        await bruno_cares(
+            db, couple, CareAction.FEED, key="drifted", item=FoodKey.PIZZA
+        )

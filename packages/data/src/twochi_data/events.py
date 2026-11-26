@@ -8,7 +8,7 @@ from typing import cast
 from twochi_application.ports import CareRecord, StoredCare
 from twochi_data.sql import Connection, Row, int_at, text_at, uuid_at
 from twochi_domain.care import RULES_VERSION, CareAction, Reaction, SicknessChange
-from twochi_domain.catalog import CATALOG, Affinity, ItemKey
+from twochi_domain.catalog import Affinity, item_key
 from twochi_domain.errors import TwochiError
 from twochi_domain.ids import PetId, UserId
 from twochi_domain.needs import Need
@@ -122,11 +122,12 @@ def _seen(raw: str) -> tuple[Reaction | None, SicknessChange | None]:
     if sickness is not None and sickness not in SicknessChange:
         raise UnexpectedPayloadError
     reaction = None
-    if isinstance(item, str) and item in CATALOG:
+    known = item_key(item) if isinstance(item, str) else None
+    if known is not None:
         # A bool is an int to isinstance; neither it nor a number out of range is one.
         if type(affinity) is not int or affinity not in Affinity:
             raise UnexpectedPayloadError
-        reaction = Reaction(item=ItemKey(item), affinity=Affinity(affinity))
+        reaction = Reaction(item=known, affinity=Affinity(affinity))
     return reaction, None if sickness is None else SicknessChange(sickness)
 
 

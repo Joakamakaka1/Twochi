@@ -1,5 +1,5 @@
 import { ITEM_ICONS, texts } from "../../shared";
-import type { CareAction, ItemKey } from "../../shared";
+import type { ActivityKey, CareAction, FoodKey, ItemKey } from "../../shared";
 
 /** The care actions that open a tray to choose what to give. */
 export type TrayAction = Extract<CareAction, "feed" | "play">;
@@ -15,9 +15,9 @@ export interface TrayItem {
   name: string;
 }
 
-// What each tray offers, in order. The engine checks the kind of every item it is
-// given: a key in the wrong tray comes back as a 422 invalid_item.
-const TRAYS: Record<TrayAction, readonly ItemKey[]> = {
+// What each tray offers, in order. Typed by the contract's kinds, so a food in the
+// activities' tray, or one the engine moved to the other kind, breaks the build.
+const TRAYS: { feed: readonly FoodKey[]; play: readonly ActivityKey[] } = {
   feed: [
     "tortilla",
     "paella",
@@ -37,5 +37,6 @@ const TRAYS: Record<TrayAction, readonly ItemKey[]> = {
 
 /** The tray of a care action: the foods when feeding, the activities when playing. */
 export function trayFor(action: TrayAction): TrayItem[] {
-  return TRAYS[action].map((key) => ({ key, icon: ITEM_ICONS[key], name: texts.care.items[key] }));
+  const keys: readonly ItemKey[] = TRAYS[action];
+  return keys.map((key) => ({ key, icon: ITEM_ICONS[key], name: texts.care.items[key] }));
 }

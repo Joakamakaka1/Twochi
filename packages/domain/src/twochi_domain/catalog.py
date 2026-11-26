@@ -1,25 +1,17 @@
 """The catalogue: the foods and activities a caretaker may choose, and the tastes.
 
 The catalogue is versioned with the rules of the game (`RULES_VERSION`). Names and
-icons are interface, so they live in the front, keyed by these stable keys.
+icons are interface, so they live in the front, keyed by these stable keys. The kind
+of an item is its type: a food is a `FoodKey`, an activity an `ActivityKey`.
 """
 
-from collections.abc import Mapping
 from enum import IntEnum, StrEnum
-from types import MappingProxyType
 
 from twochi_domain.errors import TwochiError
 
 
-class ItemKind(StrEnum):
-    """What an item of the catalogue is: food goes to hunger, an activity to fun."""
-
-    FOOD = "food"
-    ACTIVITY = "activity"
-
-
-class ItemKey(StrEnum):
-    """The stable key of each item of the catalogue."""
+class FoodKey(StrEnum):
+    """A food: given in the kitchen, it raises hunger."""
 
     TORTILLA = "tortilla"
     PAELLA = "paella"
@@ -33,6 +25,11 @@ class ItemKey(StrEnum):
     STRAWBERRIES = "strawberries"
     ICE_CREAM = "ice_cream"
     CHOCOLATE = "chocolate"
+
+
+class ActivityKey(StrEnum):
+    """An activity: played in the living room, it raises fun."""
+
     BALL = "ball"
     VIDEO_GAMES = "video_games"
     DANCE = "dance"
@@ -41,21 +38,17 @@ class ItemKey(StrEnum):
     PUZZLE = "puzzle"
 
 
-_ACTIVITIES = frozenset(
-    {
-        ItemKey.BALL,
-        ItemKey.VIDEO_GAMES,
-        ItemKey.DANCE,
-        ItemKey.READING,
-        ItemKey.DRAWING,
-        ItemKey.PUZZLE,
-    }
-)
+# Every item of the catalogue, all free and unlimited in the v1.
+type ItemKey = FoodKey | ActivityKey
 
-# Every item and its kind. All free and unlimited in the v1.
-CATALOG: Mapping[ItemKey, ItemKind] = MappingProxyType(
-    {key: ItemKind.ACTIVITY if key in _ACTIVITIES else ItemKind.FOOD for key in ItemKey}
-)
+
+def item_key(value: str) -> ItemKey | None:
+    """The item a stored key names, or None if the catalogue no longer holds it."""
+    if value in FoodKey:
+        return FoodKey(value)
+    if value in ActivityKey:
+        return ActivityKey(value)
+    return None
 
 
 class Affinity(IntEnum):
@@ -69,5 +62,5 @@ class Affinity(IntEnum):
 
 
 class InvalidItemError(TwochiError):
-    """An item that does not fit the action: missing, unknown, of the other kind, or
-    given to an action that takes none. An input error, never a refusal."""
+    """An item that does not fit the action: missing, of the other kind, or given to
+    an action that takes none. An input error, never a refusal."""

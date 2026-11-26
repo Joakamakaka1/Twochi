@@ -6,7 +6,13 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from statistics import fmean
 
-from twochi_domain.catalog import CATALOG, Affinity, InvalidItemError, ItemKey, ItemKind
+from twochi_domain.catalog import (
+    ActivityKey,
+    Affinity,
+    FoodKey,
+    InvalidItemError,
+    ItemKey,
+)
 from twochi_domain.ids import UserId
 from twochi_domain.needs import MAX_VALUE, MIN_VALUE, Need, NeedState, current_value
 from twochi_domain.pet import SAD_FROM, Pet
@@ -110,20 +116,21 @@ PETTING_WINDOW = timedelta(hours=1)
 
 
 # The kind of item each action takes; the others take none.
-_ITEM_KIND = {CareAction.FEED: ItemKind.FOOD, CareAction.PLAY: ItemKind.ACTIVITY}
+_ITEM_KIND: dict[CareAction, type[FoodKey | ActivityKey]] = {
+    CareAction.FEED: FoodKey,
+    CareAction.PLAY: ActivityKey,
+}
 
 
-def checked_item(action: CareAction, key: str | None) -> ItemKey | None:
-    """The catalogue item `key` names if it fits `action`, or InvalidItemError.
+def check_item(action: CareAction, item: ItemKey | None) -> None:
+    """Raise InvalidItemError unless `item` fits `action`.
 
     Feeding takes a food and playing an activity; every other action takes nothing.
     """
     kind = _ITEM_KIND.get(action)
-    if key is None and kind is None:
-        return None
-    if key is None or key not in CATALOG or CATALOG[ItemKey(key)] is not kind:
+    fits = item is None if kind is None else isinstance(item, kind)
+    if not fits:
         raise InvalidItemError
-    return ItemKey(key)
 
 
 def apply_care(
@@ -136,14 +143,13 @@ def apply_care(
     now: datetime,
     recent_effective_pets: int,
 ) -> CareOutcome:
-    """Decide a care action at `now`: apply it or say why not.
+    """Decide a care action at `now`: apply it or say why not, never raise.
 
-    Feeding and playing take an `item` of their kind and the pet's `affinity` with it;
-    an item that does not fit raises InvalidItemError, an input error. Anything else is
-    an outcome, never an exception. The needs are first brought to their value at
-    `now`, so switching between awake and asleep never rewrites the time already passed.
+    Feeding and playing take the `item` given, already checked against the action
+    (`check_item`), and the pet's `affinity` with it. The needs are first brought to
+    their value at `now`, so switching between awake and asleep never rewrites the
+    time already passed.
     """
-    checked_item(action, item)
     before = _materialized(pet, now)
     reason = _rejection(pet, action, actor=actor, energy=before[Need.ENERGY])
     if reason is not None:

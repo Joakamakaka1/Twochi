@@ -194,6 +194,19 @@
   },
   "components": {
     "schemas": {
+      "ActivityKey": {
+        "type": "string",
+        "enum": [
+          "ball",
+          "video_games",
+          "dance",
+          "reading",
+          "drawing",
+          "puzzle"
+        ],
+        "title": "ActivityKey",
+        "description": "An activity: played in the living room, it raises fun."
+      },
       "Affinity": {
         "type": "integer",
         "enum": [
@@ -232,12 +245,16 @@
           "item_key": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ItemKey"
+                "$ref": "#/components/schemas/FoodKey"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityKey"
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Item Key"
           }
         },
         "type": "object",
@@ -310,6 +327,25 @@
         "title": "CareActionOut",
         "description": "Applied with its deltas, or refused with its reason; the pet as it is now.\n\n`reaction` comes with feeding and playing; `sickness` when the action left the pet\nsick or healed it."
       },
+      "FoodKey": {
+        "type": "string",
+        "enum": [
+          "tortilla",
+          "paella",
+          "pizza",
+          "burger",
+          "sushi",
+          "pasta",
+          "tacos",
+          "salad",
+          "broccoli",
+          "strawberries",
+          "ice_cream",
+          "chocolate"
+        ],
+        "title": "FoodKey",
+        "description": "A food: given in the kitchen, it raises hunger."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -355,31 +391,6 @@
         ],
         "title": "HomeOut",
         "description": "The pet the caller cares for, or null until both people have arrived."
-      },
-      "ItemKey": {
-        "type": "string",
-        "enum": [
-          "tortilla",
-          "paella",
-          "pizza",
-          "burger",
-          "sushi",
-          "pasta",
-          "tacos",
-          "salad",
-          "broccoli",
-          "strawberries",
-          "ice_cream",
-          "chocolate",
-          "ball",
-          "video_games",
-          "dance",
-          "reading",
-          "drawing",
-          "puzzle"
-        ],
-        "title": "ItemKey",
-        "description": "The stable key of each item of the catalogue."
       },
       "Mood": {
         "type": "string",
@@ -531,7 +542,15 @@
       "ReactionOut": {
         "properties": {
           "item_key": {
-            "$ref": "#/components/schemas/ItemKey"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FoodKey"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityKey"
+              }
+            ],
+            "title": "Item Key"
           },
           "affinity": {
             "$ref": "#/components/schemas/Affinity"

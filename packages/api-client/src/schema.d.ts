@@ -77,6 +77,12 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * ActivityKey
+         * @description An activity: played in the living room, it raises fun.
+         * @enum {string}
+         */
+        ActivityKey: "ball" | "video_games" | "dance" | "reading" | "drawing" | "puzzle";
+        /**
          * Affinity
          * @description How much a pet likes an item, from -2 to 2; what was never rated is neutral.
          * @enum {integer}
@@ -96,7 +102,8 @@ export interface components {
             action: components["schemas"]["CareAction"];
             /** Idempotency Key */
             idempotency_key: string;
-            item_key?: components["schemas"]["ItemKey"] | null;
+            /** Item Key */
+            item_key?: components["schemas"]["FoodKey"] | components["schemas"]["ActivityKey"] | null;
         };
         /**
          * CareActionOut
@@ -117,6 +124,12 @@ export interface components {
             sickness: components["schemas"]["SicknessChange"] | null;
             pet: components["schemas"]["PetOut"];
         };
+        /**
+         * FoodKey
+         * @description A food: given in the kitchen, it raises hunger.
+         * @enum {string}
+         */
+        FoodKey: "tortilla" | "paella" | "pizza" | "burger" | "sushi" | "pasta" | "tacos" | "salad" | "broccoli" | "strawberries" | "ice_cream" | "chocolate";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -134,12 +147,6 @@ export interface components {
         HomeOut: {
             pet: components["schemas"]["PetOut"] | null;
         };
-        /**
-         * ItemKey
-         * @description The stable key of each item of the catalogue.
-         * @enum {string}
-         */
-        ItemKey: "tortilla" | "paella" | "pizza" | "burger" | "sushi" | "pasta" | "tacos" | "salad" | "broccoli" | "strawberries" | "ice_cream" | "chocolate" | "ball" | "video_games" | "dance" | "reading" | "drawing" | "puzzle";
         /**
          * Mood
          * @description What the pet shows, from the average of its needs.
@@ -211,7 +218,8 @@ export interface components {
          * @description How the pet took what it was given: the item and its affinity right then.
          */
         ReactionOut: {
-            item_key: components["schemas"]["ItemKey"];
+            /** Item Key */
+            item_key: components["schemas"]["FoodKey"] | components["schemas"]["ActivityKey"];
             affinity: components["schemas"]["Affinity"];
         };
         /**
