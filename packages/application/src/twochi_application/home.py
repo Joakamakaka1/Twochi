@@ -13,9 +13,11 @@ from twochi_domain.pet import PetReading, read_pet
 class Home:
     """What Casa shows: the pet the person cares for, or None until it is born.
 
-    `discovered` holds the tastes the caretaker discovered: for each item they gave, the
-    affinity seen the last time. It comes from the pet's events, never from its tastes,
-    so a taste changed since shows only once that item is given again (ADR 0015).
+    `discovered` holds the tastes the caretaker discovered (GLOSSARY.md, «Gusto
+    descubierto»): for each item they gave, the affinity seen the last time. It comes
+    from the pet's events, never from its tastes, so a taste changed since shows only
+    once that item is given again. No use case shows the caretaker the tastes themselves
+    (ADR 0015).
     """
 
     pet: PetReading | None

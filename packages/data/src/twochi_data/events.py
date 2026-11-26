@@ -1,6 +1,7 @@
 """Pet events: the immutable record, written only by inserting."""
 
 import json
+import logging
 from collections.abc import Mapping
 from datetime import datetime
 from typing import cast
@@ -8,10 +9,12 @@ from typing import cast
 from twochi_application.ports import CareRecord, StoredCare
 from twochi_data.sql import Connection, Row, int_at, text_at, uuid_at
 from twochi_domain.care import RULES_VERSION, CareAction, Reaction, SicknessChange
-from twochi_domain.catalog import ActivityKey, Affinity, FoodKey, ItemKey, item_key
+from twochi_domain.catalog import Affinity, ItemKey, item_key
 from twochi_domain.errors import TwochiError
 from twochi_domain.ids import PetId, UserId
 from twochi_domain.needs import Need
+
+_log = logging.getLogger(__name__)
 
 _STORED_CARE = """
 select source, action, actor_user_id, deltas::text as deltas,
@@ -30,23 +33,21 @@ where pet_id = $1
   and (payload ->> 'effective')::boolean
 """
 
-# One probe per item of the catalogue, each the pet's last event that gave it: the
-# index pet_events_pet_item_last answers it without reading the rest of the history.
-# The pet's lock serializes its care actions, so the identity follows the order they
-# were applied in, even when two share a `created_at`.
+# One pass over the pet's feedings and playings: the last one of each item. Only those
+# two actions discover a taste, whatever else an event may name. The pet's lock
+# serializes its care actions, so the identity follows the order they were applied in,
+# even when the clock went back.
 _LAST_REACTIONS = """
-select last.payload::text as payload
-from unnest($2::text[]) as item (key)
-cross join lateral (
-  select e.payload
-  from app.pet_events e
-  where e.pet_id = $1 and e.payload ->> 'item_key' = item.key
-  order by e.id desc
-  limit 1
-) as last
+select distinct on (payload ->> 'item_key')
+  id,
+  payload ->> 'item_key' as item_key,
+  coalesce((payload -> 'affinity')::text, 'null') as affinity
+from app.pet_events
+where pet_id = $1
+  and action in ('feed', 'play')
+  and payload ->> 'item_key' is not null
+order by payload ->> 'item_key', id desc
 """
-
-_CATALOGUE: list[str] = [item.value for item in (*FoodKey, *ActivityKey)]
 
 _RECORD_CARE = """
 insert into app.pet_events (
@@ -106,12 +107,19 @@ class PostgresPetEventRepository:
     async def last_reactions(self, pet_id: PetId) -> Mapping[ItemKey, Affinity]:
         """The affinity seen the last time each item was given to the pet, skipping
         items the catalogue no longer holds."""
-        rows = await self._connection.fetch(_LAST_REACTIONS, pet_id, _CATALOGUE)
+        rows = await self._connection.fetch(_LAST_REACTIONS, pet_id)
         seen: dict[ItemKey, Affinity] = {}
         for row in rows:
-            reaction, _sickness = _seen(text_at(row, "payload"))
-            if reaction is not None:
-                seen[reaction.item] = reaction.affinity
+            item = item_key(text_at(row, "item_key"))
+            if item is None:
+                continue
+            affinity: object = json.loads(text_at(row, "affinity"))
+            # A bool passes isinstance as an int: neither it nor 7 is an affinity.
+            if type(affinity) is not int or affinity not in Affinity:
+                # Casa still opens without that item. Only the id: never the payload.
+                _log.warning("care event %s has a broken reaction", int_at(row, "id"))
+                continue
+            seen[item] = Affinity(affinity)
         return seen
 
 

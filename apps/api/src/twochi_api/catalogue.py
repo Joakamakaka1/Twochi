@@ -6,7 +6,7 @@ from pydantic import GetJsonSchemaHandler
 from pydantic.json_schema import JsonSchemaValue
 from pydantic_core.core_schema import CoreSchema
 
-from twochi_domain.catalog import ActivityKey, Affinity, FoodKey
+from twochi_domain.catalog import CATALOG, ActivityKey, Affinity, FoodKey
 
 
 class _CatalogueKeys:
@@ -30,7 +30,7 @@ class _CatalogueKeys:
         return {
             "type": "object",
             "propertyNames": handler(keys),
-            "properties": {item.value: value for item in (*FoodKey, *ActivityKey)},
+            "properties": {item.value: value for item in CATALOG},
             "additionalProperties": False,
         }
 
