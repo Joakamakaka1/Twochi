@@ -494,6 +494,11 @@ def leave_leftovers(repo: Path) -> None:
     held.write_text("x", encoding="utf-8")
 
 
+def as_named(name: str) -> str:
+    """`shutil.which` for the tools a test fakes: they need not be installed."""
+    return name
+
+
 @pytest.fixture
 def windows_git(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     """Real git, except `git worktree remove`, which fails as on Windows with a file
@@ -513,8 +518,7 @@ def windows_git(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
         return RUN(args, **kwargs)  # type: ignore[call-overload]
 
     monkeypatch.setattr(subprocess, "run", run)
-    # The faked tools need not be installed.
-    monkeypatch.setattr(shutil, "which", lambda name: name)
+    monkeypatch.setattr(shutil, "which", as_named)
     return ran
 
 
