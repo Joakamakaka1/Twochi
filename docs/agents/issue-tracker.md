@@ -48,4 +48,8 @@ Decidido en el [ADR 0014](../adr/0014-game-first-care-is-v1-and-the-ai-merges.md
 - La fusión es siempre squash: el título del PR es el commit que queda en `main`.
 - Solo los triviales y los PR de Dependabot van sin identificador. Todo trabajo normal o complejo tiene su issue, aunque sea de una línea; el check `flujo` lo exige en las zonas delicadas.
 - Cuerpo del PR: las secciones de la plantilla. Con identificador, el check `flujo` exige «Tamaño» y, si no es trivial, «Revisión»; en zonas delicadas, además, «Evidencia» y «Peligro de fusión», y el tamaño no puede ser trivial ni normal.
-- Antes de abrir el PR, `just check` completo en local.
+- Antes de abrir el PR, `just check` completo en local. El hook `pre-push` que instala `just setup` lo repite antes de cada `git push` y para el push si falla. Quien instaló los hooks antes de que existiera debe volver a ejecutar `just setup`.
+  - Como `just check` comprueba el checkout, el hook rechaza el push en tres casos: si no se empuja `HEAD`, si el árbol tiene cambios o ficheros sin seguir, y si el worktree no es la carpeta principal ni un hueco pero usa su Supabase. Se empuja desde el worktree de esa rama, con el árbol limpio.
+  - Un push tarda unos 3 minutos. Desde una herramienta con un límite de 2 minutos, se lanza en segundo plano o con un límite mayor.
+  - Saltarlo con `git push --no-verify` solo vale cuando ese mismo árbol acaba de pasar `just check` completo.
+- Antes de `gh pr create`, el cuerpo en borrador pasa por `just check-pr-body FICHERO "título"`. Da el veredicto del check `flujo` del CI sobre ese cuerpo, ese título y los ficheros cambiados frente a la base, que trae antes de `origin`. Sin título, juzga el asunto del último commit que no es un merge. Un PR apilado añade `--base RAMA`. Después, `gh pr create --title "título" --body-file FICHERO`.
