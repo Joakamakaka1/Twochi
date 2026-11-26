@@ -31,13 +31,41 @@ function withTaste(tastes: Tastes, rating: TasteRating): Tastes {
   return { ...tastes, tastes: { ...tastes.tastes, [rating.item_key]: rating.affinity } };
 }
 
+const RATE_TASTE_KEY = ["tastes", "rate"] as const;
+
+// A rating whose person has left: the gate emptied the mutation cache, and a retry
+// would go out with the next person's token.
+class LeftBehindError extends Error {
+  constructor() {
+    super("The person who rated this has left");
+    this.name = "LeftBehindError";
+  }
+}
+
+function isStillWanted(queryClient: QueryClient, rating: TasteRating): boolean {
+  return queryClient
+    .getMutationCache()
+    .findAll({ mutationKey: RATE_TASTE_KEY })
+    .some((mutation) => mutation.state.variables === rating);
+}
+
+// The clients whose series of ratings had a failure: their tastes are read again once
+// the series ends.
+const failedSeries = new WeakSet<QueryClient>();
+
 // Each tap saves at once. The face moves before the API answers; a rating sent again
-// sets the same value, so a retry is safe. If it fails, the tastes are read again and
-// the faces go back to what is stored.
+// sets the same value, so a retry is safe. Ratings go out one at a time, in the order
+// tapped, so a retry never lands after a later tap. If one fails, the tastes are read
+// again once none is left in flight, and the faces show what is stored.
 export function rateTasteMutation(api: ApiClient, queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: (rating: TasteRating) => sendTaste(api, rating),
-    retry: retryApiWrite,
+    mutationKey: RATE_TASTE_KEY,
+    scope: { id: "tastes" },
+    mutationFn: (rating: TasteRating) => {
+      if (!isStillWanted(queryClient, rating)) return Promise.reject(new LeftBehindError());
+      return sendTaste(api, rating);
+    },
+    retry: (failureCount, error) => !(error instanceof LeftBehindError) && retryApiWrite(failureCount, error),
     onMutate: async (rating) => {
       // A read in flight would answer with the tastes before this rating.
       await queryClient.cancelQueries({ queryKey: TASTES_KEY });
@@ -45,7 +73,15 @@ export function rateTasteMutation(api: ApiClient, queryClient: QueryClient) {
       // Nothing to move once the person has left: the next one's cache is theirs.
       if (tastes !== undefined) queryClient.setQueryData<Tastes>(TASTES_KEY, withTaste(tastes, rating));
     },
-    onError: () => queryClient.invalidateQueries({ queryKey: TASTES_KEY }),
+    onError: () => {
+      failedSeries.add(queryClient);
+    },
+    // This rating still counts as pending here; the ones queued behind it too.
+    onSettled: async () => {
+      if (queryClient.isMutating({ mutationKey: RATE_TASTE_KEY }) > 1) return;
+      if (!failedSeries.delete(queryClient)) return;
+      await queryClient.invalidateQueries({ queryKey: TASTES_KEY });
+    },
   });
 }
 
