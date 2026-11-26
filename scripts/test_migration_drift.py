@@ -27,9 +27,7 @@ def test_a_migration_the_database_has_not_applied_is_pending() -> None:
     assert drift == MigrationDrift(pending=(AFFINITIES,), gone=())
 
 
-def test_a_migration_renumbered_by_a_rebase_is_pending_and_its_old_number_gone() -> (
-    None
-):
+def test_a_migration_renumbered_by_a_rebase_is_pending_and_its_old_one_gone() -> None:
     # The slot applied its branch's migration as 000100; main took that number first,
     # so the rebase moved the branch's one to 000200.
     applied = [
