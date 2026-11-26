@@ -287,3 +287,15 @@ async def test_no_client_reads_the_allowlist(couples: Couples) -> None:
                 await connection.fetch("select email from app.signup_allowlist")
     finally:
         await connection.close()
+
+
+async def test_the_databases_rules_version_is_the_engines(couples: Couples) -> None:
+    # Births record app.rules_version(): a bump of RULES_VERSION replaces only it.
+    rows = await couples.admin.fetch(
+        "select app.rules_version() as version, "
+        "has_function_privilege('authenticated', 'app.rules_version()', 'execute') "
+        "  as reachable"
+    )
+
+    assert text_at(rows[0], "version") == RULES_VERSION
+    assert rows[0]["reachable"] is False
