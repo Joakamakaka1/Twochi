@@ -266,10 +266,15 @@ def test_a_stacked_branch_is_judged_against_its_own_base(
 
 
 def test_default_title_skips_merge_commits(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     repo = make_repo(tmp_path, base={FLUJO_PATH: FLUJO}, branch={"docs/a.md": "x\n"})
+    # main's commit is newer than the branch's, as after any `merge origin/main`.
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2090-01-01T00:00:00+00:00")
     advance_origin_main(repo, {"docs/b.md": "y\n"})
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
     git(repo, "fetch", "--quiet", "origin")
     git(repo, "merge", "--quiet", "--no-ff", "--no-edit", "origin/main")
 

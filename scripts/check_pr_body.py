@@ -83,7 +83,9 @@ def run(
     """Run `flujo` on the draft and print its verdict; its exit code is the result."""
     body = body_path.read_text(encoding="utf-8")
     if not title:
-        subject = _git(repo, "log", "-1", "--no-merges", "--format=%s")
+        subject = _git(
+            repo, "log", "-1", "--first-parent", "--no-merges", "--format=%s"
+        )
         title = subject.decode("utf-8").strip()
     _fetch(repo, base)
     tracked = f"{REMOTE}/{base}"
