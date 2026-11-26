@@ -1,20 +1,33 @@
 import type { Animation } from "../../scene";
-import type { CareAction, CareActionResult, Pet } from "../../shared";
+import type { CareAction, CareActionResult, Mood, Pet } from "../../shared";
 
 /** How long the pet reacts to a care action before going back to how it rests. */
 export const REACTION_MS = 1600;
 
+const REST_BY_MOOD: Record<Mood, Animation> = { happy: "happy", normal: "idle", sad: "sad", sick: "sad" };
+
 /** What the pet does at rest, from how it is: asleep, or its mood. */
-export function restAnimation(_pet: Pick<Pet, "mood" | "asleep">): Animation {
-  throw new Error("not implemented");
+export function restAnimation(pet: Pick<Pet, "mood" | "asleep">): Animation {
+  return pet.asleep ? "sleep" : REST_BY_MOOD[pet.mood];
 }
+
+const APPLIED: Record<CareAction, Animation> = {
+  feed: "eat",
+  play: "happy",
+  pet: "happy",
+  bathe: "surprised",
+  sleep: "sleep",
+  wake: "surprised",
+};
 
 /** How the pet reacts to a care action, applied or refused by the engine. */
 export function reactionAnimation(
-  _action: CareAction,
-  _result: Pick<CareActionResult, "applied" | "rejection">,
+  action: CareAction,
+  result: Pick<CareActionResult, "applied" | "rejection">,
 ): Animation {
-  throw new Error("not implemented");
+  if (result.applied) return APPLIED[action];
+  // Too tired to play is not a tantrum; every other refusal is.
+  return result.rejection === "too_tired" ? "sad" : "angry";
 }
 
 /** What the scene is playing: the rest, or a reaction until a moment. */
@@ -30,18 +43,26 @@ export interface StageStep {
   play: Animation | null;
 }
 
-export function openStage(_rest: Animation): StageStep {
-  throw new Error("not implemented");
+/** The stage when Casa opens: playing the rest. */
+export function openStage(rest: Animation): StageStep {
+  return { stage: { rest, playing: rest, reactingUntil: null }, play: rest };
 }
 
-export function changeRest(_stage: PetStage, _rest: Animation): StageStep {
-  throw new Error("not implemented");
+/** The pet's mood or sleep changed: a reaction in course finishes first. */
+export function changeRest(stage: PetStage, rest: Animation): StageStep {
+  const changed = { ...stage, rest };
+  if (stage.reactingUntil !== null || stage.playing === rest) return { stage: changed, play: null };
+  return { stage: { ...changed, playing: rest }, play: rest };
 }
 
-export function react(_stage: PetStage, _reaction: Animation, _now: number): StageStep {
-  throw new Error("not implemented");
+/** A care action came back: its reaction plays from the start, even if already playing. */
+export function react(stage: PetStage, reaction: Animation, now: number): StageStep {
+  return { stage: { ...stage, playing: reaction, reactingUntil: now + REACTION_MS }, play: reaction };
 }
 
-export function tick(_stage: PetStage, _now: number): StageStep {
-  throw new Error("not implemented");
+/** Time passed: once the reaction is over, back to the rest. */
+export function tick(stage: PetStage, now: number): StageStep {
+  if (stage.reactingUntil === null || now < stage.reactingUntil) return { stage, play: null };
+  const resting = { ...stage, playing: stage.rest, reactingUntil: null };
+  return { stage: resting, play: stage.playing === stage.rest ? null : stage.rest };
 }
