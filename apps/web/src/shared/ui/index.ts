@@ -2,5 +2,6 @@
 import "./tokens.css";
 import "./base.css";
 
+export { phrases } from "./phrases";
 export { ITEM_ICONS } from "./itemIcons";
 export { devTexts, texts } from "./texts";

@@ -33,3 +33,4 @@ export type {
   TokenSource,
 } from "./api";
 export { devTexts, ITEM_ICONS, texts } from "./ui";
+export { phrases } from "./ui";

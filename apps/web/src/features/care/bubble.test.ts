@@ -14,7 +14,7 @@ type NeedValues = Record<Need, number>;
 const FULL: NeedValues = { hunger: 80, energy: 80, hygiene: 80, fun: 80, affection: 80 };
 
 // The pet as Casa holds it, with its needs frozen at NOW.
-function stateOf(pet: { mood?: Mood; asleep?: boolean; needs?: Partial<NeedValues> }): BubbleState {
+function stateOf(pet: { mood?: Mood; asleep?: boolean; needs?: Partial<NeedValues> }): BubbleState & { pet: Pet } {
   const values = { ...FULL, ...pet.needs };
   const needs = Object.fromEntries(
     Object.entries(values).map(([need, value]) => [
