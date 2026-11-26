@@ -4,6 +4,7 @@ Each test builds a throwaway git repository with a base branch and a PR branch o
 so the changed files come from `git diff`, as they do in CI.
 """
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -30,11 +31,23 @@ PR13_FILES = (
 )
 STUB_FLUJO = 'print("stub flujo")\n'
 
+# What git exports to a hook (GIT_DIR and its kin). Under the pre-push hook they would
+# point this test's `git init` and `git config` at the real repository.
+LOCAL_GIT_VARIABLES = frozenset(
+    subprocess.run(
+        ["git", "rev-parse", "--local-env-vars"],  # noqa: S607
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split()
+)
+
 
 def git(repo: Path, *args: str) -> None:
     subprocess.run(  # noqa: S603 - git with this test's own arguments
         ["git", *args],  # noqa: S607
         cwd=repo,
+        env={k: v for k, v in os.environ.items() if k not in LOCAL_GIT_VARIABLES},
         check=True,
         capture_output=True,
     )
@@ -168,6 +181,22 @@ def test_runs_the_branch_copy_while_the_base_has_none(
     assert check_body(repo, tmp_path, "") == 0
 
     assert "stub flujo" in capsys.readouterr().out
+
+
+def test_git_inside_a_hook_stays_in_its_own_repository(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # What git exports to the pre-push hook that runs `just check`.
+    decoy = tmp_path / "decoy.git"
+    monkeypatch.setenv("GIT_DIR", str(decoy))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(decoy / "index"))
+    repo = pr13_repo(tmp_path)
+    body = (TESTDATA / "pr13_body_final.md").read_text(encoding="utf-8")
+
+    assert check_body(repo, tmp_path, body) == 0
+
+    assert "flujo: OK" in capsys.readouterr().out
+    assert not decoy.exists()
 
 
 def test_main_rejects_a_missing_body_file(
