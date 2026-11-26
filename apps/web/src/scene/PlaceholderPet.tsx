@@ -9,20 +9,21 @@ import { proceduralPose, sickTremble } from "./procedural";
 const BODY_RADIUS = 0.6;
 // Closed eyes stay a thin line instead of vanishing.
 const CLOSED_EYES = 0.12;
-// The placeholder's skin, and the pale green it turns while sick.
+// The placeholder's skin; while sick it takes the colour of the --color-pet-sick token.
 const WELL_COLOUR = "#f2b880";
-const SICK_COLOUR = "#c4d6a0";
 
 interface PlaceholderPetProps {
   playing: RefObject<Playing>;
   onTap?: (() => void) | undefined;
   sick: boolean;
+  /** The skin while sick, from tokens.css; empty keeps the usual skin. */
+  sickColour: string;
   reducedMotion: boolean;
 }
 
 // The stand-in for the pet's GLB: a body and two eyes, moved by the procedural pose of
 // the clip on stage. It mutates the meshes in useFrame and never sets React state there.
-export function PlaceholderPet({ playing, onTap, sick, reducedMotion }: PlaceholderPetProps) {
+export function PlaceholderPet({ playing, onTap, sick, sickColour, reducedMotion }: PlaceholderPetProps) {
   const body = useRef<Group>(null);
   const leftEye = useRef<Mesh>(null);
   const rightEye = useRef<Mesh>(null);
@@ -51,7 +52,7 @@ export function PlaceholderPet({ playing, onTap, sick, reducedMotion }: Placehol
     >
       <mesh position={[0, BODY_RADIUS, 0]}>
         <sphereGeometry args={[BODY_RADIUS, 32, 24]} />
-        <meshStandardMaterial color={sick ? SICK_COLOUR : WELL_COLOUR} roughness={0.8} />
+        <meshStandardMaterial color={sick && sickColour !== "" ? sickColour : WELL_COLOUR} roughness={0.8} />
       </mesh>
       <mesh ref={leftEye} position={[-0.2, 0.75, 0.53]}>
         <sphereGeometry args={[0.07, 16, 12]} />

@@ -44,6 +44,8 @@ export const PetScene = memo(function PetScene({ ref, label, onTap, sick = false
     [],
   );
   const reducedMotion = useReducedMotion();
+  // Read once, as WebGL cannot read var(); the pet keeps its skin if the tokens never loaded.
+  const [sickColour] = useState(() => tokenValue("--color-pet-sick"));
 
   return (
     <div role="img" aria-label={label} className={styles.figure}>
@@ -59,7 +61,13 @@ export const PetScene = memo(function PetScene({ ref, label, onTap, sick = false
         <ambientLight intensity={1.2} />
         <directionalLight position={[2, 4, 3]} intensity={2} />
         <GroundShadow />
-        <PlaceholderPet playing={playing} onTap={onTap} sick={sick} reducedMotion={reducedMotion} />
+        <PlaceholderPet
+          playing={playing}
+          onTap={onTap}
+          sick={sick}
+          sickColour={sickColour}
+          reducedMotion={reducedMotion}
+        />
       </Canvas>
     </div>
   );
