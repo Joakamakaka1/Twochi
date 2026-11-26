@@ -235,6 +235,23 @@ describe("a care action answered after the person left", () => {
 
     expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: null });
   });
+
+  it("is not sent again once the gate forgot the person's writes", async () => {
+    const late = lateAnswer();
+    const { api, sent } = apiAnswering(late.answer, () => Response.json(applied));
+    const { queryClient, observer } = careFor(api);
+    const tap = observer.mutate(careTap("feed")).catch((error: unknown) => error);
+    await vi.waitFor(() => {
+      expect(sent).toHaveLength(1);
+    });
+
+    // What the gate does when another person signs in: a retry would carry their token.
+    queryClient.getMutationCache().clear();
+    late.release(problem(503, "database_unavailable")());
+
+    expect(await tap).toBeInstanceOf(Error);
+    expect(sent).toHaveLength(1);
+  });
 });
 
 describe("the text of a refusal", () => {
