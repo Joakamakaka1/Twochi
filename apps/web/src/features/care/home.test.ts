@@ -193,9 +193,7 @@ describe("homeAfterCare", () => {
     expect(after).toEqual({ pet: { ...fed, discovered: { pizza: 2 } } });
   });
 
-  it("discovers only the item given when there was no Casa to keep", () => {
-    const after = homeAfterCare(undefined, gave({ item_key: "ball", affinity: 0 }));
-
-    expect(after.pet?.discovered).toEqual({ ball: 0 });
+  it("leaves the cache alone when there was no Casa to update", () => {
+    expect(homeAfterCare(undefined, gave({ item_key: "ball", affinity: 0 }))).toBeUndefined();
   });
 });
