@@ -351,6 +351,12 @@ def down(slot: int, *, force: bool, checkout: Path) -> None:
     # A folder git no longer lists is what a failed removal left: on Windows, git drops
     # the worktree and exits with an error when a process holds one of its files.
     listed = folder.exists() and _is_listed(main, folder)
+    if folder.exists() and not listed and (folder / ".git").exists():
+        # Leftovers have no `.git`: git deletes it first. This one may hold work.
+        raise SlotError(
+            f"{folder} is not a worktree of {main} and has its own `.git`: remove it "
+            "by hand."
+        )
     if listed:
         config = folder / CONFIG
         problems = removal_problems(
