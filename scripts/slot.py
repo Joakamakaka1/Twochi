@@ -17,7 +17,6 @@ Usage:
 """
 
 import argparse
-import os
 import re
 import shutil
 import subprocess
@@ -26,6 +25,8 @@ import tomllib
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 from typing import cast
+
+from git_env import git_environment
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG = "supabase/config.toml"
@@ -215,12 +216,21 @@ def _command(args: Sequence[str]) -> list[str]:
 
 def _env() -> dict[str, str]:
     # `uv run` exports the venv of the checkout it ran in; a slot's commands use theirs.
-    return {name: value for name, value in os.environ.items() if name != "VIRTUAL_ENV"}
+    # A hook's GIT_DIR and its kin would point git at another repository than `cwd`.
+    return {
+        name: value
+        for name, value in git_environment().items()
+        if name != "VIRTUAL_ENV"
+    }
+
+
+def _succeeds(*args: str, cwd: Path) -> bool:
+    result = subprocess.run(_command(args), cwd=cwd, env=_env(), check=False)  # noqa: S603
+    return result.returncode == 0
 
 
 def _run(*args: str, cwd: Path) -> None:
-    result = subprocess.run(_command(args), cwd=cwd, env=_env(), check=False)  # noqa: S603
-    if result.returncode != 0:
+    if not _succeeds(*args, cwd=cwd):
         raise SlotError(f"`{' '.join(args)}` failed in {cwd}: see above.")
 
 
@@ -241,7 +251,10 @@ def _output(*args: str, cwd: Path) -> str:
 
 def _has_ref(ref: str, cwd: Path) -> bool:
     result = subprocess.run(  # noqa: S603
-        _command(["git", "show-ref", "--verify", "--quiet", ref]), cwd=cwd, check=False
+        _command(["git", "show-ref", "--verify", "--quiet", ref]),
+        cwd=cwd,
+        env=_env(),
+        check=False,
     )
     return result.returncode == 0
 
@@ -263,6 +276,31 @@ def _is_worktree(folder: Path) -> bool:
     return Path(top).resolve() == folder.resolve()
 
 
+def _is_listed(main: Path, folder: Path) -> bool:
+    """Whether git still holds `folder` as a worktree of `main`.
+
+    Not `_is_worktree`: in what a failed removal leaves, `git rev-parse` finds the main
+    folder above it.
+    """
+    listing = _output("git", "worktree", "list", "--porcelain", cwd=main)
+    return any(
+        Path(line.removeprefix("worktree ")).resolve() == folder.resolve()
+        for line in listing.splitlines()
+        if line.startswith("worktree ")
+    )
+
+
+def _has_own_git(folder: Path) -> bool:
+    """Whether `folder` holds a repository: a `.git` folder, or a `.git` file whose
+    `gitdir:` still exists. Git stops removing at the first held file, so leftovers may
+    keep a `.git` file that points at the admin folder git already dropped."""
+    dot_git = folder / ".git"
+    if not dot_git.is_file():
+        return dot_git.exists()
+    gitdir = dot_git.read_text(encoding="utf-8").strip().removeprefix("gitdir:")
+    return (folder / gitdir.strip()).exists()
+
+
 def up(slot: int, branch: str) -> None:
     if branch.startswith("-"):
         raise SlotError(f"`{branch}` is not a branch name.")
@@ -282,7 +320,10 @@ def up(slot: int, branch: str) -> None:
                 "origin/main", cwd=main,
             )  # fmt: skip
     elif not _is_worktree(folder):
-        raise SlotError(f"{folder} exists and is not a git worktree.")
+        raise SlotError(
+            f"{folder} exists and is not a git worktree: `just slot-down {slot}` "
+            "removes it."
+        )
     else:
         on = _output("git", "branch", "--show-current", cwd=folder).strip()
         if on != branch:
@@ -321,9 +362,16 @@ def down(slot: int, *, force: bool, checkout: Path) -> None:
         )
     main = _main_folder()
     folder = _slot_folder(main, slot)
-    if folder.exists():
-        if not _is_worktree(folder):
-            raise SlotError(f"{folder} is not a git worktree: remove it by hand.")
+    # A folder git no longer lists is what a failed removal left: on Windows, git drops
+    # the worktree and exits with an error when a process holds one of its files.
+    listed = folder.exists() and _is_listed(main, folder)
+    if folder.exists() and not listed and _has_own_git(folder):
+        # Not what a failed removal leaves: this one may hold work.
+        raise SlotError(
+            f"{folder} is not a worktree of {main} and has its own `.git`: remove it "
+            "by hand."
+        )
+    if listed:
         config = folder / CONFIG
         problems = removal_problems(
             slot=slot,
@@ -343,15 +391,25 @@ def down(slot: int, *, force: bool, checkout: Path) -> None:
     # By name, never by the config found from here: the project is always `twochi-sN`
     # with N from 1, so this cannot stop `twochi`. Its data volumes go too.
     _run("supabase", "stop", "--project-id", project_of(slot), "--no-backup", cwd=main)
-    if folder.exists():
-        _run(
+    if listed:
+        removed = _succeeds(
             "git", "worktree", "remove", *(["--force"] if force else []), str(folder),
             cwd=main,
         )  # fmt: skip
+        if not removed and _is_listed(main, folder):
+            raise SlotError(f"`git worktree remove` failed for {folder}: see above.")
+    # Drops what git still holds of a worktree whose folder is gone.
+    _run("git", "worktree", "prune", cwd=main)
     if folder.exists():
-        # Git for Windows drops the worktree and leaves the folders of node_modules
-        # that held pnpm's junctions. Nothing tracked is left by now.
-        shutil.rmtree(folder)
+        # Git for Windows leaves the folders of node_modules that held pnpm's junctions,
+        # and all of a worktree with a file in use. Nothing tracked is left by now.
+        try:
+            shutil.rmtree(folder)
+        except OSError as error:
+            raise SlotError(
+                f"{folder} is no longer a worktree, but {error}. Close what uses it "
+                f"and run `just slot-down {slot}` again."
+            ) from error
     sys.stdout.write(f"Slot {slot} is gone: `{project_of(slot)}` stopped.\n")
 
 
