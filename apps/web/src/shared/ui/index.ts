@@ -3,5 +3,6 @@ import "./tokens.css";
 import "./base.css";
 
 export { ITEM_ICONS } from "./itemIcons";
+export { AFFINITY_FACES } from "./affinityFaces";
 export { ACTIVITIES, FOODS } from "./catalogue";
 export { devTexts, texts } from "./texts";

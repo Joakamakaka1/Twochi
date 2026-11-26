@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useState } from "react";
 import type { MouseEvent } from "react";
 
 import { texts } from "../../shared";
-import type { CareAction, Pet } from "../../shared";
+import type { CareAction, Home } from "../../shared";
 import { ACTION_ICONS, ROOM_ICONS } from "./icons";
 import { needBars } from "./needBars";
 import { NeedRings } from "./NeedRings";
@@ -24,7 +24,7 @@ const PetScene = lazy(() => import("../../scene").then((scene) => ({ default: sc
 
 // Casa with a pet, upright for the phone: its name, mood and needs on top; the room's
 // backdrop, the pet and its bubble in the middle; the room's care above the room bar.
-export function PetHome({ pet }: { pet: Pet }) {
+export function PetHome({ pet }: { pet: NonNullable<Home["pet"]> }) {
   const [room, setRoom] = useState<Room>("kitchen");
   // Feeding and playing first open a tray to choose what to give; the button that opened
   // it gets the focus back when it goes.
@@ -123,6 +123,7 @@ export function PetHome({ pet }: { pet: Pet }) {
       {tray !== null && (
         <TraySheet
           action={tray.action}
+          discovered={pet.discovered}
           opener={tray.opener}
           onChoose={(item) => {
             care.tap(tray.action, item);

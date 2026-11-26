@@ -1,7 +1,7 @@
 import { mutationOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { ACTIVITIES, apiError, FOODS, ITEM_ICONS, retryApiRead, retryApiWrite, texts } from "../../shared";
+import { ACTIVITIES, AFFINITY_FACES, apiError, FOODS, ITEM_ICONS, retryApiRead, retryApiWrite, texts } from "../../shared";
 import type { Affinity, ApiClient, ItemKey, TasteRating, Tastes } from "../../shared";
 
 // Only the caller's own tastes: the API has no route to the ones of the pet they care
@@ -121,12 +121,11 @@ export interface Face {
   label: string;
 }
 
-const FACE_ICONS: Readonly<Record<Affinity, string>> = { [-2]: "😖", [-1]: "🙁", 0: "😐", 1: "🙂", 2: "😍" };
 const AFFINITIES: readonly Affinity[] = [-2, -1, 0, 1, 2];
 
 export const FACES: readonly Face[] = AFFINITIES.map((affinity) => ({
   affinity,
-  icon: FACE_ICONS[affinity],
+  icon: AFFINITY_FACES[affinity],
   label: texts.tastes.faces[affinity],
 }));
 

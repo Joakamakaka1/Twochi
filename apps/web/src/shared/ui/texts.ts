@@ -89,6 +89,10 @@ export const texts = {
       "-2": "¡puaj, qué asco! Pero se lo toma.",
     },
     reactionTo: (item: string, reaction: string) => `${item}: ${reaction}`,
+    // On an item in its tray, the reaction seen the last time it was given
+    // (GLOSSARY.md, «Gusto descubierto»): its face, and this for screen readers.
+    seen: { "2": "le encanta", "1": "le gusta", "0": "le da igual", "-1": "no le gusta", "-2": "le da asco" },
+    seenItem: (item: string, seen: string) => `${item}, ${seen}`,
     // Why the engine refused a care action (GLOSSARY.md, «Rechazo»).
     rejections: {
       not_caretaker: "Esta mascota la cuida tu pareja.",

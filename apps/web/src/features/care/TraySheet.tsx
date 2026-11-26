@@ -4,11 +4,13 @@ import { texts } from "../../shared";
 import type { ItemKey } from "../../shared";
 import { returnFocus } from "./sheetFocus";
 import { trayFor } from "./tray";
-import type { TrayAction } from "./tray";
+import type { Discovered, TrayAction } from "./tray";
 import styles from "./TraySheet.module.css";
 
 interface TraySheetProps {
   action: TrayAction;
+  /** What the carer saw the last time they gave each item. */
+  discovered: Discovered;
   /** The button that opened the sheet: focus goes back to it when the sheet goes. */
   opener: HTMLElement | null;
   onChoose: (item: ItemKey) => void;
@@ -22,7 +24,7 @@ interface TraySheetProps {
  * or a tap outside it; however it goes, even removed while open, focus goes back to the
  * button that opened it.
  */
-export function TraySheet({ action, opener, onChoose, onClose }: TraySheetProps) {
+export function TraySheet({ action, discovered, opener, onChoose, onClose }: TraySheetProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -64,11 +66,12 @@ export function TraySheet({ action, opener, onChoose, onClose }: TraySheetProps)
           </button>
         </header>
         <ul className={styles.items}>
-          {trayFor(action).map((item) => (
+          {trayFor(action, discovered).map((item) => (
             <li key={item.key}>
               <button
                 type="button"
                 className={styles.item}
+                aria-label={item.label}
                 onClick={() => {
                   onChoose(item.key);
                   close();
@@ -78,6 +81,11 @@ export function TraySheet({ action, opener, onChoose, onClose }: TraySheetProps)
                   {item.icon}
                 </span>
                 {item.name}
+                {item.seen !== null && (
+                  <span className={styles.seen} aria-hidden="true">
+                    {item.seen.face}
+                  </span>
+                )}
               </button>
             </li>
           ))}

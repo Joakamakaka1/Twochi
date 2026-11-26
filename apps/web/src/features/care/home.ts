@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { apiError, onForeground, retryApiRead, texts } from "../../shared";
-import type { ApiClient, Home, VisibilitySource } from "../../shared";
+import type { ApiClient, CareActionResult, Home, VisibilitySource } from "../../shared";
 
 export const HOME_KEY = ["home"] as const;
 
@@ -34,4 +34,19 @@ export function refreshHomeOnForeground(page: VisibilitySource, queryClient: Que
 // Until both people have signed up there is no pet to care for.
 export function homeHeadline(home: Home): string {
   return home.pet === null ? texts.care.petArrivesWithPartner : texts.care.caringFor(home.pet.name);
+}
+
+/**
+ * Casa after a care action, without reading it again: the pet the response brings and,
+ * when it gave an item, that item discovered with the reaction seen now.
+ */
+export function homeAfterCare(home: Home | undefined, result: CareActionResult): Home {
+  const discovered = home?.pet?.discovered ?? {};
+  const { reaction } = result;
+  return {
+    pet: {
+      ...result.pet,
+      discovered: reaction === null ? discovered : { ...discovered, [reaction.item_key]: reaction.affinity },
+    },
+  };
 }
