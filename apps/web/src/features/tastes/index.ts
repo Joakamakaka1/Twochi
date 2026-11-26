@@ -1,0 +1,1 @@
+export { TastesScreen } from "./TastesScreen";

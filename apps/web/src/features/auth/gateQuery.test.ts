@@ -47,6 +47,20 @@ describe("the gate in the query cache", () => {
     expect(queryClient.getQueryData(HOME_KEY)).toBeUndefined();
   });
 
+  it("forgets the writes a person left pending, so no retry goes out with the next person's token", async () => {
+    const auth = new FakeAuth();
+    await enterAtAal2(auth, ALICE);
+    const { queryClient, gate } = await appWith(auth);
+    const pending = new MutationObserver(queryClient, { mutationFn: () => new Promise<never>(() => undefined) });
+    void pending.mutate();
+    expect(queryClient.getMutationCache().getAll()).toHaveLength(1);
+
+    await enterAtAal2(auth, BRUNO);
+
+    expect(await gate()).toEqual({ step: "ready", userId: BRUNO });
+    expect(queryClient.getMutationCache().getAll()).toEqual([]);
+  });
+
   it("forgets it too when another person's session replaces theirs, as from another tab", async () => {
     const auth = new FakeAuth();
     await enterAtAal2(auth, ALICE);

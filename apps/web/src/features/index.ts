@@ -2,3 +2,4 @@
 export { AuthGate, createSupabaseAuth, SignOutButton } from "./auth";
 export type { AuthPort, SupabaseAuthConfig } from "./auth";
 export { HomeScreen } from "./care";
+export { TastesScreen } from "./tastes";

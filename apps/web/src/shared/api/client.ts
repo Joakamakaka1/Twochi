@@ -17,6 +17,9 @@ export type ItemKey = FoodKey | ActivityKey;
 export type Mood = Schemas["Mood"];
 export type Need = Schemas["Need"];
 export type Rejection = Schemas["Rejection"];
+// The caller's own tastes (ADR 0015), and one rating of an item.
+export type Tastes = Schemas["TastesOut"];
+export type TasteRating = Schemas["TasteOut"];
 
 export interface ApiOptions {
   // Origin that serves /api: the page's own, in production and behind Vite's proxy.
