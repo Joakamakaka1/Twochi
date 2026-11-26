@@ -11,6 +11,8 @@ export {
   createApi,
   createSignedFetch,
   isAuthFailure,
+  isStillWanted,
+  LeftBehindError,
   retryApiRead,
   retryApiWrite,
   useApi,

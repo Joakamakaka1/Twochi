@@ -1,5 +1,14 @@
 export { ApiProvider, useApi } from "./ApiProvider";
-export { ApiError, apiError, createApi, isAuthFailure, retryApiRead, retryApiWrite } from "./client";
+export {
+  ApiError,
+  apiError,
+  createApi,
+  isAuthFailure,
+  isStillWanted,
+  LeftBehindError,
+  retryApiRead,
+  retryApiWrite,
+} from "./client";
 export type {
   ActivityKey,
   Affinity,

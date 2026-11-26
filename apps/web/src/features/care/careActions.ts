@@ -1,7 +1,7 @@
 import { hashKey, mutationOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { apiError, isAuthFailure, retryApiWrite, texts } from "../../shared";
+import { apiError, isAuthFailure, isStillWanted, LeftBehindError, retryApiWrite, texts } from "../../shared";
 import type { ApiClient, CareAction, CareActionResult, Home, ItemKey, Pet } from "../../shared";
 import { HOME_KEY } from "./home";
 
@@ -38,32 +38,16 @@ function currentHome(queryClient: QueryClient) {
 
 const CARE_ACTION_KEY = ["care-action"] as const;
 
-// A tap whose person has left: the gate emptied the mutation cache, and sending it again
-// would go out with the next person's token.
-class LeftBehindError extends Error {
-  constructor() {
-    super("The person who tapped this has left");
-    this.name = "LeftBehindError";
-  }
-}
-
-function isStillWanted(queryClient: QueryClient, tap: CareTap): boolean {
-  return queryClient
-    .getMutationCache()
-    .findAll({ mutationKey: CARE_ACTION_KEY })
-    .some((mutation) => mutation.state.variables === tap);
-}
-
 // The mutation keeps the tap as its variables, so each retry sends the same key. Each
 // attempt first checks the tap is still in the mutation cache.
 export function careActionMutation(api: ApiClient, petId: Pet["id"], queryClient: QueryClient) {
   return mutationOptions({
     mutationKey: CARE_ACTION_KEY,
     mutationFn: (tap: CareTap) => {
-      if (!isStillWanted(queryClient, tap)) return Promise.reject(new LeftBehindError());
+      if (!isStillWanted(queryClient, CARE_ACTION_KEY, tap)) return Promise.reject(new LeftBehindError());
       return sendCareAction(api, petId, tap);
     },
-    retry: (failureCount, error) => !(error instanceof LeftBehindError) && retryApiWrite(failureCount, error),
+    retry: retryApiWrite,
     onMutate: async () => {
       // A read of Casa in flight would answer with the pet before this action.
       await queryClient.cancelQueries({ queryKey: HOME_KEY });
