@@ -739,20 +739,15 @@ def test_the_tastes_contract_names_the_catalogue() -> None:
 
 
 @pytest.mark.anyio
-async def test_home_shows_the_tastes_the_caretaker_discovered(
+async def test_home_brings_the_tastes_discovered_with_the_pet(
     couples: Couples, game: TestClient
 ) -> None:
     couple = await couples.create(updated_at=NOW)
-    bruno = token_of(couple, couple.bruno)
-    rate(game, token_of(couple, couple.alice), "pizza", {"affinity": 2})
-    rate(game, token_of(couple, couple.alice), "ball", {"affinity": -2})
-    before = home(game, bruno).json()["pet"]["discovered"]
 
-    care(game, bruno, couple.pet_of_alice.id, feed("tap-1", "pizza"))
+    response = home(game, token_of(couple, couple.bruno))
 
-    assert before == {}
-    # Ball was rated but never given: still undiscovered.
-    assert home(game, bruno).json()["pet"]["discovered"] == {"pizza": 2}
+    # What each item discovers is the use case's job (test_get_home.py).
+    assert response.json()["pet"]["discovered"] == {}
 
 
 def test_the_home_contract_names_the_catalogue_in_the_tastes_discovered() -> None:
