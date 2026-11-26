@@ -94,7 +94,7 @@ _Evitar_: preferencia, valoración
 La pantalla donde cada persona puntúa, con cinco caras, la afinidad de la mascota que la representa con cada objeto del catálogo. Se abre desde la cabecera y solo enseña los gustos propios: los de la mascota que cuidas se descubren cuidándola.
 
 **Gusto descubierto** (`discovered`):
-Una comida o una actividad que el cuidador ya ha dado a su mascota, con la reacción que vio entonces. El cuidador no ve la afinidad: la descubre cuidando.
+Una comida o una actividad que el cuidador ya ha dado a su mascota, con la reacción que vio la última vez. El cuidador no ve la afinidad: la descubre cuidando. Sale del último evento que dio ese objeto, nunca de los gustos puntuados, así que si la persona representada cambia un gusto, la bandeja sigue con la cara vista hasta que se le vuelve a dar.
 
 **Asco** (`disgust`):
 Lo que hace la mascota con una comida o una actividad que odia (afinidad −2): la acepta, le sube poco la necesidad y lo muestra con una reacción cómica. No es un rechazo: el motor sí aplica la acción.
