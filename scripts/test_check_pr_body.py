@@ -43,14 +43,15 @@ LOCAL_GIT_VARIABLES = frozenset(
 )
 
 
-def git(repo: Path, *args: str) -> None:
-    subprocess.run(  # noqa: S603 - git with this test's own arguments
+def git(repo: Path, *args: str) -> str:
+    return subprocess.run(  # noqa: S603 - git with this test's own arguments
         ["git", *args],  # noqa: S607
         cwd=repo,
         env={k: v for k, v in os.environ.items() if k not in LOCAL_GIT_VARIABLES},
         check=True,
         capture_output=True,
-    )
+        text=True,
+    ).stdout.strip()
 
 
 def commit(repo: Path, files: dict[str, str], subject: str) -> None:
@@ -69,7 +70,9 @@ def make_repo(
     branch: dict[str, str],
     subject: str = PR13_TITLE,
 ) -> Path:
-    """A repository on branch `feature`, one commit ahead of `main`."""
+    """A repository on branch `feature`, one commit ahead of `main`, as in `origin`."""
+    origin = tmp_path / "origin.git"
+    git(tmp_path, "init", "--quiet", "--bare", "--initial-branch=main", str(origin))
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "--quiet", "--initial-branch=main")
@@ -77,6 +80,8 @@ def make_repo(
     git(repo, "config", "user.email", "test@example.invalid")
     git(repo, "config", "commit.gpgsign", "false")
     commit(repo, {"README.md": "base\n", **base}, "chore: base")
+    git(repo, "remote", "add", "origin", str(origin))
+    git(repo, "push", "--quiet", "origin", "main")
     git(repo, "switch", "--quiet", "--create", "feature")
     commit(repo, branch, subject)
     return repo
@@ -197,6 +202,80 @@ def test_git_inside_a_hook_stays_in_its_own_repository(
 
     assert "flujo: OK" in capsys.readouterr().out
     assert not decoy.exists()
+
+
+# Review: fetch the base, stacked branches, merge commits.
+
+
+def advance_origin_main(repo: Path, files: dict[str, str]) -> None:
+    """A new commit on origin's main that the local origin/main does not know yet."""
+    known = git(repo, "rev-parse", "origin/main")
+    git(repo, "switch", "--quiet", "--create", "upstream", "origin/main")
+    commit(repo, files, "chore: upstream")
+    git(repo, "push", "--quiet", "origin", "upstream:main")
+    git(repo, "update-ref", "refs/remotes/origin/main", known)
+    git(repo, "switch", "--quiet", "feature")
+
+
+def test_fetches_the_base_before_judging(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_repo(tmp_path, base={FLUJO_PATH: FLUJO}, branch={"docs/a.md": "x\n"})
+    advance_origin_main(repo, {FLUJO_PATH: STUB_FLUJO})
+
+    assert check_body(repo, tmp_path, "") == 0
+
+    assert "stub flujo" in capsys.readouterr().out
+
+
+def test_a_failed_fetch_warns_and_judges_the_known_base(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = pr13_repo(tmp_path)
+    git(repo, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
+    body = (TESTDATA / "pr13_body_final.md").read_text(encoding="utf-8")
+
+    assert check_body(repo, tmp_path, body) == 0
+
+    captured = capsys.readouterr()
+    assert "flujo: OK" in captured.out
+    assert "could not fetch origin/main" in captured.err
+    assert "stale" in captured.err
+
+
+def test_a_stacked_branch_is_judged_against_its_own_base(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_repo(
+        tmp_path,
+        base={FLUJO_PATH: FLUJO},
+        branch={"infra/main.tf": "x\n"},
+        subject="feat(infra): lower slice (TWO-1)",
+    )
+    git(repo, "push", "--quiet", "origin", "feature:lower")
+    commit(repo, {"docs/upper.md": "x\n"}, "docs: upper slice (TWO-2)")
+    body = tmp_path / "body.md"
+    body.write_text("## Tamaño\n\nTrivial.\n", encoding="utf-8")
+    argv = ["check_pr_body.py", str(body), "docs: upper slice (TWO-2)"]
+
+    assert main([*argv, "--base", "lower"], repo=repo) == 0
+    assert main(argv, repo=repo) == 1
+
+    out = capsys.readouterr().out
+    assert "infra/main.tf" in out
+
+
+def test_default_title_skips_merge_commits(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = make_repo(tmp_path, base={FLUJO_PATH: FLUJO}, branch={"docs/a.md": "x\n"})
+    advance_origin_main(repo, {"docs/b.md": "y\n"})
+    git(repo, "fetch", "--quiet", "origin")
+    git(repo, "merge", "--quiet", "--no-ff", "--no-edit", "origin/main")
+
+    check_body(repo, tmp_path, "", title=None)
+
+    assert f"Title: {PR13_TITLE}\n" in capsys.readouterr().out
 
 
 def test_main_rejects_a_missing_body_file(
