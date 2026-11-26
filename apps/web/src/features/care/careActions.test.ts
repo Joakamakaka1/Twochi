@@ -2,7 +2,7 @@ import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, createApi, texts } from "../../shared";
-import type { CareActionResult, Home, Pet } from "../../shared";
+import type { Affinity, CareActionResult, Home, ItemKey, Pet } from "../../shared";
 import {
   careActionMutation,
   careFailureText,
@@ -26,12 +26,27 @@ const BRU: Pet = {
 
 const FED: Pet = { ...BRU, mood: "happy", needs: { ...BRU.needs, hunger: need(65) } };
 
-const applied: CareActionResult = { applied: true, rejection: null, deltas: { hunger: 25 }, pet: FED };
-const tooTired: CareActionResult = { applied: false, rejection: "too_tired", deltas: {}, pet: BRU };
+const applied: CareActionResult = {
+  applied: true,
+  rejection: null,
+  deltas: { hunger: 25 },
+  reaction: { item_key: "pizza", affinity: 0 },
+  sickness: null,
+  pet: FED,
+};
+const tooTired: CareActionResult = {
+  applied: false,
+  rejection: "too_tired",
+  deltas: {},
+  reaction: null,
+  sickness: null,
+  pet: BRU,
+};
+const bathed: CareActionResult = { ...applied, deltas: { hygiene: 60 }, reaction: null };
 
 interface Sent {
   url: string;
-  body: { action: string; idempotency_key: string } | null;
+  body: { action: string; idempotency_key: string; item_key?: string } | null;
 }
 
 // The API as a function: records each care action it was sent and answers in turn.
@@ -122,9 +137,42 @@ describe("care actions", () => {
     expect(careOutcomeText(observer.getCurrentResult().data)).toBe(texts.care.rejections.too_tired);
   });
 
-  it("says nothing when the action was applied or nothing was tapped yet", () => {
-    expect(careOutcomeText(applied)).toBeNull();
+  it("says nothing when an action without an item was applied or nothing was tapped yet", () => {
+    expect(careOutcomeText(bathed)).toBeNull();
     expect(careOutcomeText(undefined)).toBeNull();
+  });
+
+  it("sends the item the carer chose from the tray with the tap", async () => {
+    const { api, sent } = apiAnswering(() => Response.json(applied));
+    const { observer } = careFor(api);
+
+    await observer.mutate(careTap("feed", "tortilla"));
+
+    expect(sent[0]?.body).toMatchObject({ action: "feed", item_key: "tortilla" });
+  });
+
+  it("sends no item with an action that takes none", async () => {
+    const { api, sent } = apiAnswering(() => Response.json(bathed));
+    const { observer } = careFor(api);
+
+    await observer.mutate(careTap("bathe"));
+
+    expect(sent[0]?.body).not.toHaveProperty("item_key");
+  });
+});
+
+describe("the text of a reaction", () => {
+  const took = (item_key: ItemKey, affinity: Affinity): CareActionResult => ({
+    ...applied,
+    reaction: { item_key, affinity },
+  });
+
+  it("says how the pet took each food or activity it was given", () => {
+    expect(careOutcomeText(took("tortilla", 2))).toBe("Tortilla: ¡le encanta!");
+    expect(careOutcomeText(took("pizza", 1))).toBe("Pizza: le gusta.");
+    expect(careOutcomeText(took("dance", 0))).toBe("Bailar: ni fu ni fa.");
+    expect(careOutcomeText(took("reading", -1))).toBe("Leer: no le gusta mucho.");
+    expect(careOutcomeText(took("broccoli", -2))).toBe("Brócoli: ¡puaj, qué asco! Pero se lo toma.");
   });
 });
 
@@ -259,6 +307,18 @@ describe("careTaps", () => {
     await vi.waitFor(() => {
       expect(sent).toHaveLength(2);
     });
+  });
+
+  it("sends the item chosen in the tray with its tap", async () => {
+    const { api, sent } = apiAnswering(() => Response.json(applied));
+    const { taps, onOutcome } = tapsFor(api);
+
+    taps.tap("play", "video_games");
+    await vi.waitFor(() => {
+      expect(onOutcome).toHaveBeenCalledTimes(1);
+    });
+
+    expect(sent[0]?.body).toMatchObject({ action: "play", item_key: "video_games" });
   });
 
   it("hears the outcome of each tap, applied or refused", async () => {

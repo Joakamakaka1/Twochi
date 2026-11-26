@@ -6,7 +6,14 @@ import { REACTION_MS } from "./petAnimation";
 import { createStageDriver } from "./stageDriver";
 
 const PET = {} as Pet;
-const applied: CareActionResult = { applied: true, rejection: null, deltas: {}, pet: PET };
+const applied: CareActionResult = {
+  applied: true,
+  rejection: null,
+  deltas: {},
+  reaction: null,
+  sickness: null,
+  pet: PET,
+};
 
 // The scene as the driver sees it: what it was asked to play, in order.
 function fakeScene() {
