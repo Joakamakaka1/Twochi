@@ -294,7 +294,24 @@ export interface components {
             pet_id: string | null;
             /** Tastes */
             tastes: {
-                [key: string]: components["schemas"]["Affinity"];
+                tortilla?: components["schemas"]["Affinity"];
+                paella?: components["schemas"]["Affinity"];
+                pizza?: components["schemas"]["Affinity"];
+                burger?: components["schemas"]["Affinity"];
+                sushi?: components["schemas"]["Affinity"];
+                pasta?: components["schemas"]["Affinity"];
+                tacos?: components["schemas"]["Affinity"];
+                salad?: components["schemas"]["Affinity"];
+                broccoli?: components["schemas"]["Affinity"];
+                strawberries?: components["schemas"]["Affinity"];
+                ice_cream?: components["schemas"]["Affinity"];
+                chocolate?: components["schemas"]["Affinity"];
+                ball?: components["schemas"]["Affinity"];
+                video_games?: components["schemas"]["Affinity"];
+                dance?: components["schemas"]["Affinity"];
+                reading?: components["schemas"]["Affinity"];
+                drawing?: components["schemas"]["Affinity"];
+                puzzle?: components["schemas"]["Affinity"];
             };
         };
         /** ValidationError */

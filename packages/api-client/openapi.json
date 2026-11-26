@@ -756,8 +756,72 @@
             "title": "Pet Id"
           },
           "tastes": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/Affinity"
+            "properties": {
+              "tortilla": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "paella": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "pizza": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "burger": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "sushi": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "pasta": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "tacos": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "salad": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "broccoli": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "strawberries": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "ice_cream": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "chocolate": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "ball": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "video_games": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "dance": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "reading": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "drawing": {
+                "$ref": "#/components/schemas/Affinity"
+              },
+              "puzzle": {
+                "$ref": "#/components/schemas/Affinity"
+              }
+            },
+            "additionalProperties": false,
+            "propertyNames": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FoodKey"
+                },
+                {
+                  "$ref": "#/components/schemas/ActivityKey"
+                }
+              ]
             },
             "type": "object",
             "title": "Tastes"

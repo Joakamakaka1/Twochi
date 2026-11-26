@@ -3,11 +3,39 @@
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, BeforeValidator
+from pydantic import BaseModel, BeforeValidator, GetJsonSchemaHandler
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core.core_schema import CoreSchema
 
 from twochi_application.actors import UserActor
 from twochi_application.tastes import MyTastes, RatedTaste, RateTaste
 from twochi_domain.catalog import ActivityKey, Affinity, FoodKey
+
+
+class _CatalogueKeys:
+    """A map keyed by the catalogue, said so in the contract.
+
+    `propertyNames` names the enums, as JSON Schema says it. The generated client does
+    not read it, so each item is also an optional property and nothing else is allowed:
+    a key outside the catalogue breaks the front's build.
+    """
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, schema: CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        mapping = handler(schema)
+        keys = schema.get("keys_schema")
+        if schema["type"] != "dict" or keys is None:  # pragma: no cover - map only
+            return mapping
+        # The values' schema as the map's own: a reference to Affinity, not a copy.
+        value = mapping["additionalProperties"]
+        return {
+            "type": "object",
+            "propertyNames": handler(keys),
+            "properties": {item.value: value for item in (*FoodKey, *ActivityKey)},
+            "additionalProperties": False,
+        }
 
 
 class TastesOut(BaseModel):
@@ -15,7 +43,7 @@ class TastesOut(BaseModel):
     `tastes` empty until the pet is born. What was never rated is neutral."""
 
     pet_id: UUID | None
-    tastes: dict[FoodKey | ActivityKey, Affinity]
+    tastes: Annotated[dict[FoodKey | ActivityKey, Affinity], _CatalogueKeys]
 
 
 def _whole_number(value: object) -> object:
