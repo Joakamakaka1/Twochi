@@ -190,6 +190,124 @@
           }
         }
       }
+    },
+    "/api/tastes/me": {
+      "get": {
+        "summary": "My Tastes",
+        "operationId": "my_tastes_api_tastes_me_get",
+        "parameters": [
+          {
+            "name": "X-Twochi-Auth",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Twochi-Auth"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TastesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/tastes/me/{item_key}": {
+      "put": {
+        "summary": "Rate",
+        "operationId": "rate_api_tastes_me__item_key__put",
+        "parameters": [
+          {
+            "name": "item_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FoodKey"
+                },
+                {
+                  "$ref": "#/components/schemas/ActivityKey"
+                }
+              ],
+              "title": "Item Key"
+            }
+          },
+          {
+            "name": "X-Twochi-Auth",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Twochi-Auth"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TasteIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TasteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -584,6 +702,74 @@
         ],
         "title": "SicknessChange",
         "description": "An action that left the pet sick, or healed it; the event keeps it."
+      },
+      "TasteIn": {
+        "properties": {
+          "affinity": {
+            "$ref": "#/components/schemas/Affinity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "affinity"
+        ],
+        "title": "TasteIn",
+        "description": "The caller's affinity with one item, from -2 (hates) to 2 (loves)."
+      },
+      "TasteOut": {
+        "properties": {
+          "item_key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FoodKey"
+              },
+              {
+                "$ref": "#/components/schemas/ActivityKey"
+              }
+            ],
+            "title": "Item Key"
+          },
+          "affinity": {
+            "$ref": "#/components/schemas/Affinity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "affinity"
+        ],
+        "title": "TasteOut",
+        "description": "The taste as stored."
+      },
+      "TastesOut": {
+        "properties": {
+          "pet_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pet Id"
+          },
+          "tastes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Affinity"
+            },
+            "type": "object",
+            "title": "Tastes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pet_id",
+          "tastes"
+        ],
+        "title": "TastesOut",
+        "description": "What the caller rated for the pet that represents them; `pet_id` is null and\n`tastes` empty until the pet is born. What was never rated is neutral."
       },
       "ValidationError": {
         "properties": {

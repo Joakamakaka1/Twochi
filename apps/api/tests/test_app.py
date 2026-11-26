@@ -660,8 +660,15 @@ def test_rating_an_unknown_item_is_an_invalid_item(game: TestClient, item: str) 
 
 @pytest.mark.parametrize(
     "body",
-    [{"affinity": 3}, {"affinity": -3}, {"affinity": "2"}, {"affinity": 1.5}, {}],
-    ids=["above", "below", "text", "fraction", "missing"],
+    [
+        {"affinity": 3},
+        {"affinity": -3},
+        {"affinity": "2"},
+        {"affinity": 1.5},
+        {"affinity": True},
+        {},
+    ],
+    ids=["above", "below", "text", "fraction", "boolean", "missing"],
 )
 def test_an_affinity_out_of_range_is_a_422_problem(
     game: TestClient, body: object
