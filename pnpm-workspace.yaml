@@ -4,3 +4,7 @@ packages:
 
 # Supply-chain cooldown: ignore npm releases younger than seven days, like exclude-newer in uv.
 minimumReleaseAge: 10080
+# Copies, not hard links to pnpm's store: on Windows no link of a .node that another
+# checkout has loaded (a running Vite) can be deleted, so `just slot-down` could not
+# remove a slot.
+packageImportMethod: copy
