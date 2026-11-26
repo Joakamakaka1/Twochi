@@ -25,18 +25,18 @@
   content: "";
   position: absolute;
   z-index: -1;
-  width: calc(var(--space-7) * 3);
+  width: var(--blob-size);
   aspect-ratio: 1;
-  border-radius: 46% 54% 52% 48% / 55% 45% 55% 45%;
+  border-radius: var(--radius-blob);
 }
 
 .hero::before {
-  translate: -32% -14%;
+  translate: var(--blob-one-offset);
   background: var(--color-blob-one);
 }
 
 .hero::after {
-  translate: 34% 12%;
+  translate: var(--blob-two-offset);
   background: var(--color-blob-two);
 }
 

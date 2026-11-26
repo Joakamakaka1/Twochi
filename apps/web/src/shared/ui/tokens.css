@@ -29,6 +29,8 @@
   --color-ink: #47355e;
   --color-ink-soft: #75638c;
   --color-line: #ecd8ec;
+  /* A field's boundary: at least 3:1 on the surface and on the background. */
+  --color-field-edge: #8f7aa8;
   --color-primary: #cdb8ff;
   --color-primary-edge: #a58ae8;
   --color-secondary: #c8f0df;
@@ -75,6 +77,8 @@
   --radius-md: 1.25rem;
   --radius-lg: 2rem;
   --radius-pill: 999rem;
+  /* The sign-in blobs: an uneven pebble, not a circle. */
+  --radius-blob: 46% 54% 52% 48% / 55% 45% 55% 45%;
 
   /* Size: thumb-sized targets and a phone-wide column. */
   --tap-size: 3.5rem;
@@ -84,6 +88,9 @@
   --focus-offset: 3px;
   --column-width: 26rem;
   --qr-size: 12.5rem;
+  --blob-size: 9rem;
+  --blob-one-offset: -32% -14%;
+  --blob-two-offset: 34% 12%;
 
   /* Shadow: buttons sit on a coloured edge, like a toy's; cards float softly. */
   --press-depth: 4px;

@@ -63,7 +63,7 @@
   min-height: var(--tap-size);
   padding: var(--space-3) var(--space-5);
   margin-bottom: var(--press-depth);
-  border: none;
+  border: var(--border-width) solid transparent;
   border-radius: var(--radius-pill);
   background: var(--button-fill);
   box-shadow: 0 var(--press-depth) 0 var(--button-edge);
@@ -97,7 +97,7 @@
   width: 100%;
   min-height: var(--tap-size);
   padding: var(--space-3) var(--space-4);
-  border: var(--border-width) solid var(--color-line);
+  border: var(--border-width) solid var(--color-field-edge);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-ink);
