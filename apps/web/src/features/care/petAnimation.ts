@@ -1,5 +1,5 @@
 import type { Animation } from "../../scene";
-import type { CareAction, CareActionResult, Mood, Pet } from "../../shared";
+import type { Affinity, CareAction, CareActionResult, Mood, Pet } from "../../shared";
 
 /** How long the pet reacts to a care action before going back to how it rests. */
 export const REACTION_MS = 1600;
@@ -11,6 +11,8 @@ export function restAnimation(pet: Pick<Pet, "mood" | "asleep">): Animation {
   return pet.asleep ? "sleep" : REST_BY_MOOD[pet.mood];
 }
 
+// The single map from the pet and what just happened to it to the clip it plays
+// (TWO-48, «Emociones y animaciones»): its rest above, its reactions here.
 const APPLIED: Record<CareAction, Animation> = {
   feed: "eat",
   play: "happy",
@@ -20,14 +22,21 @@ const APPLIED: Record<CareAction, Animation> = {
   wake: "surprised",
 };
 
+// Loving or liking it is a joy, neutral or not liking it is just eating (or playing),
+// and disgust is a comic tantrum.
+const BY_AFFINITY: Record<Affinity, Animation> = { "2": "happy", "1": "happy", "0": "eat", "-1": "eat", "-2": "angry" };
+
 /** How the pet reacts to a care action, applied or refused by the engine. */
 export function reactionAnimation(
   action: CareAction,
-  result: Pick<CareActionResult, "applied" | "rejection">,
+  result: Pick<CareActionResult, "applied" | "reaction" | "sickness" | "pet">,
 ): Animation {
-  if (result.applied) return APPLIED[action];
-  // Too tired to play is not a tantrum; every other refusal is.
-  return result.rejection === "too_tired" ? "sad" : "angry";
+  // A refusal is a tantrum, except asleep: it grumbles and goes on sleeping.
+  if (!result.applied) return result.pet.asleep ? "sleep" : "angry";
+  if (result.sickness === "healed") return "happy";
+  if (result.sickness === "fell_sick") return "sad";
+  if (result.reaction !== null) return BY_AFFINITY[result.reaction.affinity];
+  return APPLIED[action];
 }
 
 /** What the scene is playing: the rest, or a reaction until a moment. */
