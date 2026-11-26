@@ -7,7 +7,8 @@ from datetime import datetime
 from typing import Protocol
 
 from twochi_application.actors import UserActor
-from twochi_domain.care import Applied, CareAction
+from twochi_domain.care import Applied, CareAction, Reaction, SicknessChange
+from twochi_domain.catalog import Affinity, ItemKey
 from twochi_domain.errors import TwochiError
 from twochi_domain.ids import PetId, UserId
 from twochi_domain.needs import Need
@@ -38,6 +39,14 @@ class PetRepository(Protocol):
         ...
 
 
+class AffinityRepository(Protocol):
+    """The tastes of the pets the actor may see: each pet's affinity with an item."""
+
+    async def affinity(self, pet_id: PetId, item: ItemKey) -> Affinity:
+        """The pet's affinity with the item; neutral if its person never rated it."""
+        ...
+
+
 class PetEventRepository(Protocol):
     """The immutable record of what happens to the pets the actor may see."""
 
@@ -61,11 +70,14 @@ class PetEventRepository(Protocol):
 @dataclass(frozen=True, slots=True)
 class StoredCare:
     """An event found by its key. `action` is None when it is not a care action from
-    the interface, such as a birth; its deltas are then left empty."""
+    the interface, such as a birth; its deltas are then left empty. The reaction and
+    the sickness change are the ones seen when it was applied."""
 
     action: CareAction | None
     actor: UserId | None
     deltas: Mapping[Need, float]
+    reaction: Reaction | None = None
+    sickness: SicknessChange | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +97,9 @@ class Transaction(Protocol):
 
     @property
     def events(self) -> PetEventRepository: ...
+
+    @property
+    def affinities(self) -> AffinityRepository: ...
 
 
 class Database(Protocol):
