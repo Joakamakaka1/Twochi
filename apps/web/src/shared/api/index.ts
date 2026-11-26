@@ -1,11 +1,13 @@
 export { ApiProvider, useApi } from "./ApiProvider";
 export { ApiError, apiError, createApi, isAuthFailure, retryApiRead, retryApiWrite } from "./client";
 export type {
+  Affinity,
   ApiClient,
   ApiOptions,
   CareAction,
   CareActionResult,
   Home,
+  ItemKey,
   Mood,
   Need,
   Pet,

@@ -5,6 +5,8 @@ import type { Pet } from "../../shared";
 import { needBars } from "./needBars";
 import { ROOMS } from "./rooms";
 import type { Room } from "./rooms";
+import { opensTray, trayFor } from "./tray";
+import type { TrayAction } from "./tray";
 import { useCareActions, useNow } from "./useHome";
 import { usePetStage } from "./usePetStage";
 
@@ -18,6 +20,8 @@ const SCENE_HEIGHT = "min(50vh, 360px)";
 // Casa with a pet: its state, its needs going down live and the four rooms.
 export function PetHome({ pet }: { pet: Pet }) {
   const [room, setRoom] = useState<Room>("kitchen");
+  // Feeding and playing first open a tray to choose what to give.
+  const [tray, setTray] = useState<TrayAction | null>(null);
   const now = useNow(TICK_MS);
   const { attach, react } = usePetStage(pet);
   const care = useCareActions(pet.id, react);
@@ -62,6 +66,7 @@ export function PetHome({ pet }: { pet: Pet }) {
             aria-pressed={each.room === room}
             onClick={() => {
               setRoom(each.room);
+              setTray(null);
             }}
           >
             {texts.care.rooms[each.room]}
@@ -77,7 +82,8 @@ export function PetHome({ pet }: { pet: Pet }) {
             type="button"
             disabled={care.isPending}
             onClick={() => {
-              care.tap(action);
+              if (opensTray(action)) setTray(action);
+              else care.tap(action);
             }}
           >
             {texts.care.actions[action]}
@@ -85,7 +91,37 @@ export function PetHome({ pet }: { pet: Pet }) {
         ))}
       </section>
 
-      <p role="status">{care.rejection}</p>
+      {tray !== null && (
+        <section aria-labelledby="tray-title">
+          <h2 id="tray-title">{texts.care.trays[tray]}</h2>
+          <ul>
+            {trayFor(tray).map((item) => (
+              <li key={item.key}>
+                <button
+                  type="button"
+                  disabled={care.isPending}
+                  onClick={() => {
+                    care.tap(tray, item.key);
+                    setTray(null);
+                  }}
+                >
+                  <span aria-hidden="true">{item.icon}</span> {item.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => {
+              setTray(null);
+            }}
+          >
+            {texts.care.closeTray}
+          </button>
+        </section>
+      )}
+
+      <p role="status">{care.outcome}</p>
       {care.failure !== null && (
         <>
           <p role="alert">{care.failure}</p>

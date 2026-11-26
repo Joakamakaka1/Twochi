@@ -16,16 +16,18 @@ export {
   useApi,
 } from "./api";
 export type {
+  Affinity,
   ApiClient,
   ApiOptions,
   CareAction,
   CareActionResult,
   FetchLike,
   Home,
+  ItemKey,
   Mood,
   Need,
   Pet,
   Rejection,
   TokenSource,
 } from "./api";
-export { devTexts, texts } from "./ui";
+export { devTexts, ITEM_ICONS, texts } from "./ui";

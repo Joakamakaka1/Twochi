@@ -7,8 +7,10 @@ import type { FetchLike, TokenSource } from "./signedFetch";
 export type { ApiClient, Home, Pet } from "@twochi/api-client";
 
 type Schemas = components["schemas"];
+export type Affinity = Schemas["Affinity"];
 export type CareAction = Schemas["CareAction"];
 export type CareActionResult = Schemas["CareActionOut"];
+export type ItemKey = Schemas["ItemKey"];
 export type Mood = Schemas["Mood"];
 export type Need = Schemas["Need"];
 export type Rejection = Schemas["Rejection"];
