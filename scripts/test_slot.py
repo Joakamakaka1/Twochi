@@ -21,8 +21,11 @@ from slot import (
     config_problems,
     main,
     removal_problems,
+    require_unreserved_ports,
+    reserved_port_problems,
     slot_config,
     slot_number,
+    slot_ports,
 )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -354,6 +357,84 @@ def test_a_slot_starts_the_services_ci_starts() -> None:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 
     assert f"supabase start -x {EXCLUDED_SERVICES}\n" in ci
+
+
+# --- Ports Windows keeps for itself ---------------------------------------------------
+
+# `netsh interface ipv4 show excludedportrange protocol=tcp` on 2026-11-26, on a Spanish
+# Windows: Hyper-V and WinNAT had taken 55826-55925, and slot 6 failed at
+# `supabase start` with "bind: Intento de acceso a un socket no permitido" on 55922.
+NETSH = """\
+
+Protocolo tcp Intervalos de exclusi�n de puertos
+
+Puerto de inicio    Puerto final
+----------          --------
+     13508       13508
+     50000       50059     *
+     54519       54618
+     55826       55925
+
+* - Exclusiones de puertos administrados.
+
+"""
+
+
+def test_a_slots_ports_are_the_main_folders_a_hundred_further_per_slot() -> None:
+    assert slot_ports(MAIN, 6) == [55920, 55921, 55922, 55923, 55924, 55927, 55929]
+
+
+@pytest.mark.parametrize("slot", [4, 7, 9])
+def test_a_slot_clear_of_the_reserved_ranges_has_no_problem(slot: int) -> None:
+    assert reserved_port_problems(NETSH, slot_ports(MAIN, slot)) == []
+
+
+def test_a_slot_inside_a_reserved_range_names_its_ports_and_the_range() -> None:
+    problems = reserved_port_problems(NETSH, slot_ports(MAIN, 6))
+
+    assert len(problems) == 1
+    assert "55920, 55921, 55922, 55923, 55924" in problems[0]
+    assert "55826-55925" in problems[0]
+    assert "55927" not in problems[0]
+
+
+def test_the_range_is_inclusive_at_both_ends() -> None:
+    assert len(reserved_port_problems(NETSH, [55826, 55925, 13508])) == 2
+    assert reserved_port_problems(NETSH, [55825, 55926, 13507, 13509]) == []
+
+
+def test_slot_five_shares_the_range_too() -> None:
+    assert "55827, 55829" in reserved_port_problems(NETSH, slot_ports(MAIN, 5))[0]
+
+
+def test_no_exclusions_is_no_problem() -> None:
+    assert reserved_port_problems("", slot_ports(MAIN, 6)) == []
+
+
+@pytest.mark.usefixtures("no_commands")
+def test_outside_windows_netsh_is_never_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("sys.platform", "linux")
+
+    require_unreserved_ports(6, slot_ports(MAIN, 6))
+
+
+def test_on_windows_a_reserved_port_stops_the_slot_and_says_what_to_do(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def netsh(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 0, stdout=NETSH)
+
+    monkeypatch.setattr("sys.platform", "win32")
+    monkeypatch.setattr(subprocess, "run", netsh)
+
+    with pytest.raises(SlotError) as refused:
+        require_unreserved_ports(6, slot_ports(MAIN, 6))
+
+    message = str(refused.value)
+    assert "55922" in message
+    assert "55826-55925" in message
+    assert "another slot" in message
+    assert "net stop winnat" in message
 
 
 def removal(
