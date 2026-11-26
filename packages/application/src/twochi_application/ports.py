@@ -80,6 +80,11 @@ class PetEventRepository(Protocol):
         """Record an applied care action, from the interface, under its key."""
         ...
 
+    async def last_reactions(self, pet_id: PetId) -> Mapping[ItemKey, Affinity]:
+        """The affinity seen the last time each item was given to the pet, skipping
+        items the catalogue no longer holds."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class StoredCare:

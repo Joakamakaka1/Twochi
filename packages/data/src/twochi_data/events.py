@@ -8,7 +8,7 @@ from typing import cast
 from twochi_application.ports import CareRecord, StoredCare
 from twochi_data.sql import Connection, Row, int_at, text_at, uuid_at
 from twochi_domain.care import RULES_VERSION, CareAction, Reaction, SicknessChange
-from twochi_domain.catalog import Affinity, item_key
+from twochi_domain.catalog import ActivityKey, Affinity, FoodKey, ItemKey, item_key
 from twochi_domain.errors import TwochiError
 from twochi_domain.ids import PetId, UserId
 from twochi_domain.needs import Need
@@ -29,6 +29,24 @@ where pet_id = $1
   and created_at > $2
   and (payload ->> 'effective')::boolean
 """
+
+# One probe per item of the catalogue, each the pet's last event that gave it: the
+# index pet_events_pet_item_last answers it without reading the rest of the history.
+# The pet's lock serializes its care actions, so the identity follows the order they
+# were applied in, even when two share a `created_at`.
+_LAST_REACTIONS = """
+select last.payload::text as payload
+from unnest($2::text[]) as item (key)
+cross join lateral (
+  select e.payload
+  from app.pet_events e
+  where e.pet_id = $1 and e.payload ->> 'item_key' = item.key
+  order by e.id desc
+  limit 1
+) as last
+"""
+
+_CATALOGUE: list[str] = [item.value for item in (*FoodKey, *ActivityKey)]
 
 _RECORD_CARE = """
 insert into app.pet_events (
@@ -84,6 +102,17 @@ class PostgresPetEventRepository:
             idempotency_key,
             at,
         )
+
+    async def last_reactions(self, pet_id: PetId) -> Mapping[ItemKey, Affinity]:
+        """The affinity seen the last time each item was given to the pet, skipping
+        items the catalogue no longer holds."""
+        rows = await self._connection.fetch(_LAST_REACTIONS, pet_id, _CATALOGUE)
+        seen: dict[ItemKey, Affinity] = {}
+        for row in rows:
+            reaction, _sickness = _seen(text_at(row, "payload"))
+            if reaction is not None:
+                seen[reaction.item] = reaction.affinity
+        return seen
 
 
 class UnexpectedDeltasError(TwochiError):
