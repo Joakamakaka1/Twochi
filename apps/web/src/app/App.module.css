@@ -1,0 +1,32 @@
+/* The frame around Casa: a phone-wide column with the name and the way out on top. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--column-width);
+  min-height: 100dvh;
+  margin-inline: auto;
+  padding: max(var(--space-3), env(safe-area-inset-top)) var(--space-4)
+    max(var(--space-4), env(safe-area-inset-bottom));
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-block: var(--space-2) var(--space-4);
+}
+
+.brand {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-hero);
+  letter-spacing: var(--tracking-hero);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+}

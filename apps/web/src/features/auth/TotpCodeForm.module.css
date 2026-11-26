@@ -1,0 +1,20 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Six digits, big and spaced, easy to check against the authenticator. */
+.code {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-heading);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-code);
+  text-align: center;
+}

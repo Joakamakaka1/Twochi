@@ -187,7 +187,8 @@ apps/web/src/
 - TypeScript: `strict` y `noUncheckedIndexedAccess`. Sin `any` ni `enum`: uniones de literales, que ya salen del OpenAPI.
 - Componentes: funciones con exportación con nombre, fichero en `PascalCase` y hooks `useX`. La lógica va en hooks; el componente pinta.
 - Textos de interfaz en un módulo, no repartidos por los componentes: cambiarlos o traducirlos es tocar un fichero.
-- Accesibilidad mínima: todo lo que se toca es un `button` con nombre, también lo que flota sobre el `Canvas`.
+- Estilo: CSS Modules por componente y un único fichero de tokens, `shared/ui/tokens.css`. Ningún otro CSS escribe a mano un color, un radio o un espacio; lo comprueba un test. La app sirve sus fuentes, con la licencia al lado, sin CDN. Solo modo claro, y `prefers-reduced-motion` apaga las transiciones de la interfaz.
+- Accesibilidad mínima: todo lo que se toca es un `button` con nombre, también lo que flota sobre el `Canvas`. El foco siempre se ve.
 - Necesidades: el front interpola con `value`, `updated_at` y `rate_per_hour` que da la API. No copia reglas del motor.
 
 ## Convenciones de prompts, Terraform y workflows

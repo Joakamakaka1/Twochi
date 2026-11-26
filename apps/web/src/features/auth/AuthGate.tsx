@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 
 import { texts } from "../../shared";
 import type { AuthPort } from "./authPort";
+import { AuthScreen } from "./AuthScreen";
 import { EnrollTotpScreen } from "./EnrollTotpScreen";
 import { SignInScreen } from "./SignInScreen";
-import { SignOutButton } from "./SignOutButton";
 import { AuthContext, useGate } from "./useAuth";
 import { VerifyTotpScreen } from "./VerifyTotpScreen";
 
@@ -21,15 +21,20 @@ export function AuthGate({ auth, children }: AuthGateProps) {
 
   function screen(): ReactNode {
     if (gate.data === undefined) {
-      if (!gate.isError) return <p>{texts.loading}</p>;
+      if (!gate.isError) {
+        return (
+          <AuthScreen>
+            <p>{texts.loading}</p>
+          </AuthScreen>
+        );
+      }
       return (
-        <main>
+        <AuthScreen signOut>
           <p role="alert">{texts.failure}</p>
           <button type="button" onClick={() => void gate.refetch()}>
             {texts.retry}
           </button>
-          <SignOutButton />
-        </main>
+        </AuthScreen>
       );
     }
     switch (gate.data.step) {

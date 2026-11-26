@@ -1,0 +1,27 @@
+/* The QR on a white tile, so any camera reads it against the pastel card. */
+.qr {
+  align-self: center;
+  width: var(--qr-size);
+  height: auto;
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--color-line);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.secret {
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
+
+.key {
+  display: block;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-highlight);
+  color: var(--color-ink);
+  font-size: var(--text-md);
+  overflow-wrap: anywhere;
+  user-select: all;
+}

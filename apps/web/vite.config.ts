@@ -13,6 +13,8 @@ export default defineConfig(({ mode }) => {
     },
     test: {
       include: ["src/**/*.test.{ts,tsx}"],
+      // Stylesheets stay empty in tests, except the ?raw reads of the style tokens test.
+      css: { include: [/[?&]raw(?:&|$)/] },
     },
   };
 });
