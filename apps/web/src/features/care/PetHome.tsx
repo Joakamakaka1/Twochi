@@ -3,7 +3,7 @@ import type { MouseEvent } from "react";
 
 import { texts } from "../../shared";
 import type { CareAction, CareActionResult, Home } from "../../shared";
-import { bubbleKey, chooseBubble, currentOutcome } from "./bubble";
+import { bubbleKey, celebrating, chooseBubble } from "./bubble";
 import { Celebration } from "./Celebration";
 import { ACTION_ICONS, ROOM_ICONS, SICK_ICON } from "./icons";
 import { needBars } from "./needBars";
@@ -19,6 +19,7 @@ import { TraySheet } from "./TraySheet";
 import { useCareActions, useNow } from "./useHome";
 import { usePetBubble } from "./usePetBubble";
 import { usePetStage } from "./usePetStage";
+import { usePetTouches } from "./usePetTouches";
 
 const TICK_MS = 1000;
 
@@ -33,9 +34,10 @@ export function PetHome({ pet }: { pet: NonNullable<Home["pet"]> }) {
   // it gets the focus back when it goes.
   const [tray, setTray] = useState<{ action: TrayAction; opener: HTMLElement } | null>(null);
   const now = useNow(TICK_MS);
-  const { attach, react } = usePetStage(pet);
-  const { last, luck, hear } = usePetBubble();
-  // Each outcome the engine gives plays its reaction and takes the bubble for a while.
+  const { attach, react, tickle } = usePetStage(pet);
+  const { last, luck, hear, hearTickle } = usePetBubble();
+  // Each outcome the engine gives plays its reaction and takes the bubble for a while,
+  // unless it adds nothing to a giggle in course.
   const onOutcome = useCallback(
     (action: CareAction, result: CareActionResult) => {
       react(action, result);
@@ -44,16 +46,12 @@ export function PetHome({ pet }: { pet: NonNullable<Home["pet"]> }) {
     [react, hear],
   );
   const care = useCareActions(pet.id, onOutcome);
-  const { tap } = care;
-  // Stable, so the memoised scene skips the bars' tick every second.
-  const petByTouch = useCallback(() => {
-    tap("pet");
-  }, [tap]);
+  const petByTouch = usePetTouches({ asleep: pet.asleep, tap: care.tap, tickle, hearTickle });
   const actions = ROOMS.find((each) => each.room === room)?.actions ?? [];
   const backdrop = roomBackdrop(room, pet);
   const bars = needBars(pet, now);
   const bubble = chooseBubble({ pet, bars, now: now.getTime() }, last, () => luck);
-  const healing = currentOutcome(last, now.getTime())?.result.sickness === "healed";
+  const healing = celebrating(last, now.getTime());
   const sick = pet.mood === "sick";
 
   // While a tap is in flight the buttons say so but stay focusable (aria-disabled), so

@@ -9,6 +9,7 @@ import {
   REACTION_MS,
   restAnimation,
   tick,
+  TICKLE_ANIMATION,
 } from "./petAnimation";
 
 const MOODS: readonly Mood[] = ["happy", "normal", "sad", "sick"];
@@ -71,6 +72,10 @@ describe("reactionAnimation", () => {
       }
     },
   );
+
+  it("giggles at tickles with happy", () => {
+    expect(TICKLE_ANIMATION).toBe("happy");
+  });
 
   it("celebrates healing with happy, whatever it was given", () => {
     const healedWithDisgust = result({ reaction: { item_key: "broccoli", affinity: -2 }, sickness: "healed" });
