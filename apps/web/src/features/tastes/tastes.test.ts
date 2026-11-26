@@ -1,9 +1,17 @@
-import { MutationObserver, QueryClient } from "@tanstack/react-query";
+import { MutationObserver, QueryClient, QueryObserver } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, AUTH_HEADER, createApi, ITEM_ICONS } from "../../shared";
 import type { Tastes } from "../../shared";
-import { FACES, rateTasteMutation, readTastes, TASTES_KEY, tasteSections, tastesNotice } from "./tastes";
+import {
+  FACES,
+  rateTasteMutation,
+  readTastes,
+  TASTES_KEY,
+  tasteSections,
+  tastesNotice,
+  tastesQuery,
+} from "./tastes";
 
 const ALI = "00000000-0000-4000-8000-0000000fa11c";
 
@@ -32,6 +40,44 @@ function apiAnswering(...answers: (() => Response)[]) {
 
 const problem = (status: number, code: string) => () =>
   Response.json({ type: "about:blank", title: "Request failed", status, code }, { status });
+
+interface HeldCall extends Sent {
+  respond: (response: Response) => void;
+}
+
+// The API as a function that answers only when the test says, to order what crosses.
+function apiOnHold() {
+  const calls: HeldCall[] = [];
+  const api = createApi(() => Promise.resolve("jwt-1"), {
+    baseUrl: "https://twochi.test",
+    baseFetch: async (request) => {
+      const body: unknown = request.method === "GET" ? null : await request.clone().json();
+      return new Promise<Response>((respond) => {
+        calls.push({ request: `${request.method} ${request.url}`, body, respond });
+      });
+    },
+  });
+  return { api, calls };
+}
+
+function answer(calls: HeldCall[], index: number, response: Response) {
+  const call = calls[index];
+  if (call === undefined) throw new Error(`no call ${String(index)} to answer`);
+  call.respond(response);
+}
+
+async function waitForCalls(calls: HeldCall[], count: number) {
+  await vi.waitFor(() => {
+    expect(calls).toHaveLength(count);
+  });
+}
+
+// Lets whatever is ready to go out (a request, a retry, a read) go out.
+async function settle() {
+  for (let turn = 0; turn < 5; turn += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
 
 describe("readTastes", () => {
   it("reads the caller's own tastes from /api/tastes/me, with their JWT", async () => {
@@ -194,6 +240,71 @@ describe("rating a taste", () => {
       "PUT https://twochi.test/api/tastes/me/pizza",
     ]);
     expect(queryClient.getQueryData<Tastes>(TASTES_KEY)?.tastes).toEqual({ pizza: 2 });
+  });
+
+  it("sends one rating at a time, so a retry never lands after a later tap", async () => {
+    const { api, calls } = apiOnHold();
+    const { observer } = ratingWith(api);
+
+    const liked = observer.mutate({ item_key: "ball", affinity: 1 });
+    await waitForCalls(calls, 1);
+    const loved = observer.mutate({ item_key: "ball", affinity: 2 });
+    await settle();
+    answer(calls, 0, problem(503, "database_unavailable")());
+    await waitForCalls(calls, 2);
+    answer(calls, 1, Response.json({ item_key: "ball", affinity: 1 }));
+    await waitForCalls(calls, 3);
+    answer(calls, 2, Response.json({ item_key: "ball", affinity: 2 }));
+    await Promise.all([liked, loved]);
+
+    // The last tap is the last write: the server keeps what the screen shows.
+    expect(calls.map((call) => call.body)).toEqual([{ affinity: 1 }, { affinity: 1 }, { affinity: 2 }]);
+  });
+
+  it("reads the tastes again only once no rating is left in flight", async () => {
+    const { api, calls } = apiOnHold();
+    const { queryClient, observer } = ratingWith(api);
+    // The screen, watching the tastes: an invalidation reads them again at once.
+    const screen = new QueryObserver(queryClient, { ...tastesQuery(api), staleTime: Infinity });
+    const stop = screen.subscribe(() => undefined);
+
+    const pizza = observer.mutate({ item_key: "pizza", affinity: 1 }).catch((error: unknown) => error);
+    await waitForCalls(calls, 1);
+    const ball = observer.mutate({ item_key: "ball", affinity: 2 });
+    await settle();
+    answer(calls, 0, problem(422, "invalid_request")());
+    await waitForCalls(calls, 2);
+    await settle();
+
+    // The ball is still on its way: a read now could show its old face.
+    expect(calls.map((call) => call.request)).toEqual([
+      "PUT https://twochi.test/api/tastes/me/pizza",
+      "PUT https://twochi.test/api/tastes/me/ball",
+    ]);
+    answer(calls, 1, Response.json({ item_key: "ball", affinity: 2 }));
+    await waitForCalls(calls, 3);
+    expect(calls[2]?.request).toBe("GET https://twochi.test/api/tastes/me");
+    answer(calls, 2, Response.json({ pet_id: ALI, tastes: { pizza: -1, ball: 2 } }));
+    await Promise.all([pizza, ball]);
+    await vi.waitFor(() => {
+      expect(queryClient.getQueryData<Tastes>(TASTES_KEY)).toEqual({ pet_id: ALI, tastes: { pizza: -1, ball: 2 } });
+    });
+    stop();
+  });
+
+  it("never sends a retry once the person has left", async () => {
+    const { api, calls } = apiOnHold();
+    const { queryClient, observer } = ratingWith(api);
+
+    const rated = observer.mutate({ item_key: "pizza", affinity: 2 }).catch((error: unknown) => error);
+    await waitForCalls(calls, 1);
+    // What the gate does when another person signs in: their token would go with it.
+    queryClient.getMutationCache().clear();
+    answer(calls, 0, problem(503, "database_unavailable")());
+    await settle();
+
+    expect(calls).toHaveLength(1);
+    expect(await rated).toBeInstanceOf(Error);
   });
 
   it("writes nothing into a cache the person already left", async () => {
