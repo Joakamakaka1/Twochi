@@ -60,7 +60,7 @@ export function PetHome({ pet }: { pet: Pet }) {
       }),
     [tap, tickle, hearTickle],
   );
-  // Stable while the pet sleeps or not, so the memoised scene skips the bars' tick.
+  // New only when the pet falls asleep or wakes, so the memoised scene skips the bars' tick.
   const { asleep } = pet;
   const petByTouch = useCallback(() => {
     touches(performance.now(), asleep);

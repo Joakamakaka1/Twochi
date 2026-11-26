@@ -88,8 +88,8 @@ function statePhrase({ pet, bars }: BubbleState, random: () => number): string {
 
 /**
  * What the pet says (GLOSSARY.md, «Bocadillo»), in order: the last outcome (tickles
- * included) for a few seconds, asleep, sick with a hint of what it lacks most, the most urgent request under
- * 30, and its mood. `random` picks among the phrases of that situation.
+ * included) for a few seconds, asleep, sick with a hint of what it lacks most, the most
+ * urgent request under 30, and its mood. `random` picks among the phrases of that situation.
  */
 export function chooseBubble(state: BubbleState, last: LastOutcome | null, random: () => number): string {
   const outcome = currentOutcome(last, state.now);
