@@ -1,0 +1,98 @@
+/* A sheet pinned to the bottom of the screen, as wide as Casa's column. */
+.sheet {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  max-width: min(100%, var(--column-width));
+  max-height: 85dvh;
+  margin: 0 auto;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--color-surface);
+  box-shadow: 0 calc(-1 * var(--space-2)) var(--space-6) color-mix(in srgb, var(--color-ink) 18%, transparent);
+  color: var(--color-ink);
+  animation: rise calc(var(--motion-quick) * 2) var(--motion-ease);
+}
+
+.sheet::backdrop {
+  background: color-mix(in srgb, var(--color-ink) 35%, transparent);
+  animation: appear calc(var(--motion-quick) * 2) ease-out;
+}
+
+/* The content fills the sheet, so a tap on the dialog itself is a tap outside it. */
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: 85dvh;
+  padding: var(--space-3) var(--space-4) max(var(--space-5), env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.grabber {
+  align-self: center;
+  width: var(--space-7);
+  height: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-line);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.title {
+  font-size: var(--text-lg);
+}
+
+.close {
+  --button-fill: var(--color-quiet);
+  --button-edge: var(--color-quiet-edge);
+  min-height: var(--tap-size-small);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+.items {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  --button-fill: var(--color-background);
+  --button-edge: var(--color-quiet-edge);
+  flex-direction: column;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.itemIcon {
+  font-size: var(--text-2xl);
+  line-height: 1;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}

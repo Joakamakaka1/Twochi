@@ -1,13 +1,18 @@
 import { lazy, Suspense, useCallback, useState } from "react";
 
 import { texts } from "../../shared";
-import type { Pet } from "../../shared";
+import type { CareAction, Pet } from "../../shared";
+import { ACTION_ICONS, ROOM_ICONS } from "./icons";
 import { needBars } from "./needBars";
+import { NeedRings } from "./NeedRings";
+import { PetBubble } from "./PetBubble";
+import styles from "./PetHome.module.css";
 import { roomBackdrop } from "./roomBackdrop";
 import { ROOMS } from "./rooms";
 import type { Room } from "./rooms";
-import { opensTray, trayFor } from "./tray";
+import { opensTray } from "./tray";
 import type { TrayAction } from "./tray";
+import { TraySheet } from "./TraySheet";
 import { useCareActions, useNow } from "./useHome";
 import { usePetStage } from "./usePetStage";
 
@@ -15,10 +20,9 @@ const TICK_MS = 1000;
 
 // Three.js comes in its own chunk, after Casa's first paint.
 const PetScene = lazy(() => import("../../scene").then((scene) => ({ default: scene.PetScene })));
-// The scene's place on screen, kept while that chunk loads.
-const SCENE_HEIGHT = "min(50vh, 360px)";
 
-// Casa with a pet: its state, its needs going down live and the four rooms.
+// Casa with a pet, upright for the phone: its name, mood and needs on top; the room's
+// backdrop, the pet and its bubble in the middle; the room's care above the room bar.
 export function PetHome({ pet }: { pet: Pet }) {
   const [room, setRoom] = useState<Room>("kitchen");
   // Feeding and playing first open a tray to choose what to give.
@@ -33,111 +37,97 @@ export function PetHome({ pet }: { pet: Pet }) {
   }, [tap]);
   const actions = ROOMS.find((each) => each.room === room)?.actions ?? [];
 
-  return (
-    <>
-      <h1>{texts.care.caringFor(pet.name)}</h1>
-      <p>
-        {texts.care.moodIs(texts.care.moods[pet.mood])} · {pet.asleep ? texts.care.asleep : texts.care.awake}
-      </p>
+  // While a tap is in flight the buttons say so but stay focusable (aria-disabled), so
+  // focus can go back to the one that opened the tray; the taps' own lock drops the tap.
+  const careButton = (action: CareAction) => () => {
+    if (care.isPending) return;
+    if (opensTray(action)) setTray(action);
+    else care.tap(action);
+  };
 
-      <div
-        style={{
-          height: SCENE_HEIGHT,
-          backgroundImage: `url("${roomBackdrop(room, pet)}")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center bottom",
-        }}
-      >
-        <Suspense fallback={null}>
-          <PetScene ref={attach} label={texts.care.petFigure(pet.name)} onTap={petByTouch} />
-        </Suspense>
+  return (
+    <div className={styles.home}>
+      <header className={styles.status}>
+        <h1 className={styles.name}>{texts.care.caringFor(pet.name)}</h1>
+        <p className={styles.chips}>
+          <span className={styles.chip} data-mood={pet.mood}>
+            {texts.care.moodIs(texts.care.moods[pet.mood])}
+          </span>
+          <span className={styles.chip} data-asleep={pet.asleep || undefined}>
+            {pet.asleep ? texts.care.asleep : texts.care.awake}
+          </span>
+        </p>
+      </header>
+
+      <NeedRings bars={needBars(pet, now)} />
+
+      <div className={styles.stage}>
+        {/* Keyed by the picture, so a new room or the light going off fades in. */}
+        <img key={roomBackdrop(room, pet)} className={styles.backdrop} src={roomBackdrop(room, pet)} alt="" />
+        <div className={styles.scene}>
+          <Suspense fallback={null}>
+            <PetScene ref={attach} label={texts.care.petFigure(pet.name)} onTap={petByTouch} />
+          </Suspense>
+        </div>
+        <PetBubble text={care.outcome} />
       </div>
 
-      <section aria-labelledby="needs-title">
-        <h2 id="needs-title">{texts.care.needsTitle}</h2>
-        <ul>
-          {needBars(pet, now).map((bar) => (
-            <li key={bar.need}>
-              <label htmlFor={`need-${bar.need}`}>{texts.care.needs[bar.need]}</label>{" "}
-              <meter id={`need-${bar.need}`} min={0} max={100} value={bar.value} /> {Math.round(bar.value)}
-              {bar.asks && <strong> {texts.care.asksFor}</strong>}
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <nav aria-label={texts.care.roomsTitle}>
-        {ROOMS.map((each) => (
-          <button
-            key={each.room}
-            type="button"
-            aria-pressed={each.room === room}
-            onClick={() => {
-              setRoom(each.room);
-              setTray(null);
-            }}
-          >
-            {texts.care.rooms[each.room]}
+      {care.failure !== null && (
+        <div className={styles.failure}>
+          <p role="alert">{care.failure}</p>
+          <button type="button" className={styles.retry} onClick={care.retry}>
+            {texts.retry}
           </button>
-        ))}
-      </nav>
+        </div>
+      )}
 
-      <section aria-labelledby="room-title">
-        <h2 id="room-title">{texts.care.rooms[room]}</h2>
+      <section className={styles.care} aria-label={texts.care.rooms[room]}>
         {actions.map((action) => (
           <button
             key={action}
             type="button"
-            disabled={care.isPending}
-            onClick={() => {
-              if (opensTray(action)) setTray(action);
-              else care.tap(action);
-            }}
+            className={styles.careButton}
+            aria-disabled={care.isPending || undefined}
+            onClick={careButton(action)}
           >
+            <span className={styles.careIcon} aria-hidden="true">
+              {ACTION_ICONS[action]}
+            </span>
             {texts.care.actions[action]}
           </button>
         ))}
       </section>
 
-      {tray !== null && (
-        <section aria-labelledby="tray-title">
-          <h2 id="tray-title">{texts.care.trays[tray]}</h2>
-          <ul>
-            {trayFor(tray).map((item) => (
-              <li key={item.key}>
-                <button
-                  type="button"
-                  disabled={care.isPending}
-                  onClick={() => {
-                    care.tap(tray, item.key);
-                    setTray(null);
-                  }}
-                >
-                  <span aria-hidden="true">{item.icon}</span> {item.name}
-                </button>
-              </li>
-            ))}
-          </ul>
+      <nav className={styles.rooms} aria-label={texts.care.roomsTitle}>
+        {ROOMS.map((each) => (
           <button
+            key={each.room}
             type="button"
+            className={styles.room}
+            aria-pressed={each.room === room}
             onClick={() => {
-              setTray(null);
+              setRoom(each.room);
             }}
           >
-            {texts.care.closeTray}
+            <span className={styles.roomIcon} aria-hidden="true">
+              {ROOM_ICONS[each.room]}
+            </span>
+            {texts.care.rooms[each.room]}
           </button>
-        </section>
-      )}
+        ))}
+      </nav>
 
-      <p role="status">{care.outcome}</p>
-      {care.failure !== null && (
-        <>
-          <p role="alert">{care.failure}</p>
-          <button type="button" onClick={care.retry}>
-            {texts.retry}
-          </button>
-        </>
+      {tray !== null && (
+        <TraySheet
+          action={tray}
+          onChoose={(item) => {
+            care.tap(tray, item);
+          }}
+          onClose={() => {
+            setTray(null);
+          }}
+        />
       )}
-    </>
+    </div>
   );
 }

@@ -21,3 +21,15 @@ export function needBars(pet: Pet, now: Date): NeedBar[] {
     return { need, value, asks: value < ASKS_BELOW };
   });
 }
+
+/**
+ * The need Casa highlights: the one the pet asks for most, the lowest under 30, or none.
+ * A tie goes to the need shown first.
+ */
+export function mostUrgent(bars: readonly NeedBar[]): Need | null {
+  let urgent: NeedBar | null = null;
+  for (const bar of bars) {
+    if (bar.asks && (urgent === null || bar.value < urgent.value)) urgent = bar;
+  }
+  return urgent?.need ?? null;
+}
