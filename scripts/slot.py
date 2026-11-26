@@ -17,6 +17,7 @@ Usage:
 """
 
 import argparse
+import os
 import re
 import shutil
 import subprocess
@@ -204,6 +205,36 @@ def removal_problems(
     return problems
 
 
+def slot_ports(config: str, slot: int) -> list[int]:
+    """The ports slot `slot` takes, from the main folder's `supabase/config.toml`."""
+    own = range(MAIN_PORTS.start + 100 * slot, MAIN_PORTS.stop + 100 * slot)
+    return sorted(
+        {port for _, port in _ports(slot_config(config, slot)) if port in own}
+    )
+
+
+# A row of `netsh interface ipv4 show excludedportrange`: its headers are translated,
+# its numbers are not. A `*` marks an exclusion an administrator added.
+_EXCLUDED_RANGE = re.compile(r"^\s*(\d+)\s+(\d+)\s*\*?\s*$", re.MULTILINE)
+
+
+def reserved_port_problems(netsh: str, ports: Sequence[int]) -> list[str]:
+    """Which of `ports` fall in a TCP range Windows keeps, from netsh's listing.
+
+    Hyper-V and WinNAT reserve ranges of their own; nothing else may bind there, and
+    `supabase start` fails late with "bind: An attempt was made to access a socket".
+    """
+    problems: list[str] = []
+    for found in _EXCLUDED_RANGE.finditer(netsh):
+        start, end = int(found[1]), int(found[2])
+        if taken := [port for port in ports if start <= port <= end]:
+            problems.append(
+                f"{', '.join(map(str, taken))} are in the range {start}-{end} Windows "
+                "reserves"
+            )
+    return problems
+
+
 # --- The shell around them ------------------------------------------------------------
 
 
@@ -259,6 +290,36 @@ def _has_ref(ref: str, cwd: Path) -> bool:
     return result.returncode == 0
 
 
+def require_unreserved_ports(slot: int, ports: Sequence[int]) -> None:
+    """Stop before a worktree and `supabase start` if Windows holds one of `ports`."""
+    if sys.platform != "win32":
+        return
+    # By full path: the check never runs whatever `netsh` is first on PATH.
+    netsh = Path(os.environ.get("SYSTEMROOT", r"C:\Windows"), "System32", "netsh.exe")
+    result = subprocess.run(  # noqa: S603
+        [str(netsh), "interface", "ipv4", "show", "excludedportrange", "protocol=tcp"],
+        stdout=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",  # its headers come in the console's code page
+        check=False,
+    )
+    if result.returncode != 0:
+        sys.stderr.write(
+            "slot: could not read the ports Windows reserves; going on without that "
+            "check.\n"
+        )
+        return
+    if problems := reserved_port_problems(result.stdout, ports):
+        raise SlotError(
+            f"Slot {slot} cannot start: its ports {'; '.join(problems)} (`netsh "
+            "interface ipv4 show excludedportrange protocol=tcp`). Pick another slot "
+            "number whose ports are free. The reservations change after a reboot, or "
+            "after `net stop winnat` and `net start winnat` in an administrator "
+            "terminal."
+        )
+
+
 def _main_folder() -> Path:
     """The main checkout, also when this runs from a worktree of it."""
     common = _output(
@@ -305,6 +366,9 @@ def up(slot: int, branch: str) -> None:
     if branch.startswith("-"):
         raise SlotError(f"`{branch}` is not a branch name.")
     main = _main_folder()
+    # Before the worktree: a slot Windows blocks is picked again under another number.
+    held = _output("git", "show", f"HEAD:{CONFIG}", cwd=main)
+    require_unreserved_ports(slot, slot_ports(held, slot))
     folder = _slot_folder(main, slot)
     if not folder.exists():
         _run("git", "fetch", "origin", cwd=main)
