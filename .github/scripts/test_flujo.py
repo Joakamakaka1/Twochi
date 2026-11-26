@@ -476,7 +476,7 @@ def test_main_escapes_workflow_commands_in_paths(
 ) -> None:
     changed = write_event(
         tmp_path,
-        title="ci: tweak (TWO-2)",
+        title="ci: tweak",  # Without an id the error names the sensitive paths.
         body="",
         changed=(
             "apps/x\n::error title=spoof::y.py\0"

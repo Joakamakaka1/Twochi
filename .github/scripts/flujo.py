@@ -15,6 +15,7 @@ import json
 import os
 import re
 import sys
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -55,7 +56,9 @@ SIZES = ("trivial", "normal", "complejo", "delicado")
 SMALL_SIZES = ("trivial", "normal")
 # The first size the section names is the declared one.
 SIZE_WORD = re.compile(rf"\b(?:{'|'.join(SIZES)})\b", re.IGNORECASE)
-HEADING = re.compile(r"^#{1,3}\s+(.+?)\s*$", re.MULTILINE)
+HEADING = re.compile(r"^(#{1,3})[ \t]+(.*?)[ \t]*$", re.MULTILINE)
+FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+CODE_PLACEHOLDER = "[code block]"
 HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 DEPENDABOT = "dependabot[bot]"
 
@@ -97,21 +100,63 @@ def is_app_code(path: str) -> bool:
         path.startswith(CODE_PREFIXES)
         and name.endswith(CODE_SUFFIXES)
         and ".config." not in name
+        and ".gen." not in name
         and not is_test(path)
     )
+
+
+def folded(text: str) -> str:
+    """Compare section names without case or accents: «Tamano» is «Tamaño»."""
+    decomposed = unicodedata.normalize("NFD", text)
+    bare = "".join(char for char in decomposed if not unicodedata.combining(char))
+    return bare.casefold().strip()
+
+
+def without_fences(body: str) -> str:
+    """Swap each fenced code block for a placeholder, so its headings do not count.
+
+    The placeholder keeps the block as content of the section that holds it.
+    """
+    lines: list[str] = []
+    fence = ""
+    for line in body.split("\n"):
+        match = FENCE.match(line)
+        if fence:
+            # Closed by a run of the same character, at least as long, and nothing else.
+            if (
+                match
+                and match.group(1).startswith(fence)
+                and not line[match.end() :].strip()
+            ):
+                fence = ""
+            continue
+        if match:
+            fence = match.group(1)
+            lines.append(CODE_PLACEHOLDER)
+            continue
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def section_text(body: str, name: str) -> str:
     """Return the content of the first level 1 to 3 heading with that name, or "".
 
+    The section runs until the next heading of its level or above, so subheadings
+    stay inside. Text after a colon in the heading (`## Tamaño: normal`) is content.
     Template hints are HTML comments, so an untouched template has no content.
     """
-    headings = list(HEADING.finditer(body))
+    text = without_fences(HTML_COMMENT.sub("", unicodedata.normalize("NFC", body)))
+    headings = list(HEADING.finditer(text))
     for index, heading in enumerate(headings):
-        if heading.group(1).casefold() != name.casefold():
+        title, _, inline = heading.group(2).partition(":")
+        if folded(title) != folded(name):
             continue
-        end = headings[index + 1].start() if index + 1 < len(headings) else len(body)
-        content = HTML_COMMENT.sub("", body[heading.end() : end]).strip()
+        level = len(heading.group(1))
+        end = next(
+            (h.start() for h in headings[index + 1 :] if len(h.group(1)) <= level),
+            len(text),
+        )
+        content = f"{inline}\n{text[heading.end() : end]}".strip()
         if content:
             return content
     return ""
@@ -204,10 +249,10 @@ def load(event_path: Path, changed_path: Path) -> PullRequest:
     """Build the PR from the GitHub event file and the list of changed files."""
     event = cast("dict[str, Any]", json.loads(event_path.read_text(encoding="utf-8")))
     pull = cast("dict[str, Any]", event["pull_request"])
-    # NUL-separated, as `git diff --name-only -z` writes it: names may hold spaces.
-    changed = [
-        name for name in changed_path.read_text(encoding="utf-8").split(chr(0)) if name
-    ]
+    # NUL-separated, as `git diff --name-only -z` writes it: names may hold spaces and
+    # line breaks. Bytes, so a `\r` in a name is not turned into a newline.
+    raw = changed_path.read_bytes().decode("utf-8")
+    changed = [name for name in raw.split(chr(0)) if name]
     return PullRequest(
         title=str(pull["title"]),
         body=str(pull.get("body") or ""),
@@ -216,16 +261,24 @@ def load(event_path: Path, changed_path: Path) -> PullRequest:
     )
 
 
+def escaped(message: str) -> str:
+    """Escape a workflow command message as `@actions/core` does.
+
+    A changed path may hold a newline; unescaped, it would start a command of its own.
+    """
+    return message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
         sys.stderr.write("usage: flujo.py CHANGED_FILES_LIST\n")
         return 2
     pr = load(Path(os.environ["GITHUB_EVENT_PATH"]), Path(argv[1]))
     for warning in warnings_for(pr):
-        sys.stdout.write(f"::warning title=flujo::{warning}\n")
+        sys.stdout.write(f"::warning title=flujo::{escaped(warning)}\n")
     errors = check(pr)
     for error in errors:
-        sys.stdout.write(f"::error title=flujo::{error}\n")
+        sys.stdout.write(f"::error title=flujo::{escaped(error)}\n")
     if not errors:
         sys.stdout.write("flujo: OK\n")
     return 1 if errors else 0
