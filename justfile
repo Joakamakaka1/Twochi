@@ -65,6 +65,13 @@ check-infra:
     if [ -d infra ]; then cd infra && tflint --init && tflint --recursive; fi
     node --test "infra/**/*.test.mjs"
 
+# The draft PR body in FILE as CI's `flujo` will judge it (TWO-26): the files changed
+# against origin/main, origin/main's flujo.py and the title, by default the last commit's
+# subject. Run it before `gh pr create`, with the PR's title when it differs.
+[positional-arguments]
+check-pr-body file *title:
+    uv run --locked python scripts/check_pr_body.py "$@"
+
 # Regenerate the OpenAPI document from the API, and the front's types from it. A test in
 # check-py fails while the document is stale; check-web fails while the types are.
 openapi:

@@ -1,8 +1,9 @@
 # Fast local guards: secrets, Python format and lint. Run with `uvx pre-commit@4.7.0`.
 # Hooks are pinned to a commit; keep the ruff rev in step with ruff in uv.lock.
-# `just setup` installs both hook types; every hook runs before the commit, and the
-# Supabase IDs guard also reads the commit message.
-default_install_hook_types: [pre-commit, commit-msg]
+# `just setup` installs the three hook types; every hook runs before the commit but
+# `just check`, which runs before a push, and the Supabase IDs guard also reads the
+# commit message.
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit]
 repos:
   - repo: https://github.com/gitleaks/gitleaks
@@ -33,3 +34,17 @@ repos:
     hooks:
       - id: ruff-format
       - id: ruff-check
+  # Before a push, the whole `just check`, the same steps as CI (TWO-26): PR 9 was
+  # pushed with it failing. It checks the checkout, not the pushed refs, takes about
+  # three minutes, needs local Supabase (`just up`) and ends with `supabase db reset`.
+  # The rule is not to skip it; `git push --no-verify` only when this same tree has just
+  # passed `just check` in full.
+  - repo: local
+    hooks:
+      - id: just-check
+        name: just check
+        language: system
+        entry: just check
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
