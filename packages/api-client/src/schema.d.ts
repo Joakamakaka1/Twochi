@@ -72,6 +72,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tastes/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My Tastes */
+        get: operations["my_tastes_api_tastes_me_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tastes/me/{item_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rate */
+        put: operations["rate_api_tastes_me__item_key__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -234,6 +268,52 @@ export interface components {
          * @enum {string}
          */
         SicknessChange: "fell_sick" | "healed";
+        /**
+         * TasteIn
+         * @description The caller's affinity with one item, from -2 (hates) to 2 (loves).
+         */
+        TasteIn: {
+            affinity: components["schemas"]["Affinity"];
+        };
+        /**
+         * TasteOut
+         * @description The taste as stored.
+         */
+        TasteOut: {
+            /** Item Key */
+            item_key: components["schemas"]["FoodKey"] | components["schemas"]["ActivityKey"];
+            affinity: components["schemas"]["Affinity"];
+        };
+        /**
+         * TastesOut
+         * @description What the caller rated for the pet that represents them; `pet_id` is null and
+         *     `tastes` empty until the pet is born. What was never rated is neutral.
+         */
+        TastesOut: {
+            /** Pet Id */
+            pet_id: string | null;
+            /** Tastes */
+            tastes: {
+                tortilla?: components["schemas"]["Affinity"];
+                paella?: components["schemas"]["Affinity"];
+                pizza?: components["schemas"]["Affinity"];
+                burger?: components["schemas"]["Affinity"];
+                sushi?: components["schemas"]["Affinity"];
+                pasta?: components["schemas"]["Affinity"];
+                tacos?: components["schemas"]["Affinity"];
+                salad?: components["schemas"]["Affinity"];
+                broccoli?: components["schemas"]["Affinity"];
+                strawberries?: components["schemas"]["Affinity"];
+                ice_cream?: components["schemas"]["Affinity"];
+                chocolate?: components["schemas"]["Affinity"];
+                ball?: components["schemas"]["Affinity"];
+                video_games?: components["schemas"]["Affinity"];
+                dance?: components["schemas"]["Affinity"];
+                reading?: components["schemas"]["Affinity"];
+                drawing?: components["schemas"]["Affinity"];
+                puzzle?: components["schemas"]["Affinity"];
+            };
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -366,6 +446,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CareActionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_tastes_api_tastes_me_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Twochi-Auth"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TastesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rate_api_tastes_me__item_key__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Twochi-Auth"?: string | null;
+            };
+            path: {
+                item_key: components["schemas"]["FoodKey"] | components["schemas"]["ActivityKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TasteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TasteOut"];
                 };
             };
             /** @description Validation Error */

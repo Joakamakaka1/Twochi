@@ -30,6 +30,10 @@ class PetRepository(Protocol):
         """The pet this person cares for, or None if it does not exist or is hidden."""
         ...
 
+    async def representing(self, user_id: UserId) -> PetId | None:
+        """The pet that represents this person, or None if not born yet or hidden."""
+        ...
+
     async def lock(self, pet_id: PetId) -> Pet | None:
         """A pet and its needs, locked until the transaction ends; None if hidden."""
         ...
@@ -44,6 +48,16 @@ class AffinityRepository(Protocol):
 
     async def affinity(self, pet_id: PetId, item: ItemKey) -> Affinity:
         """The pet's affinity with the item; neutral if its person never rated it."""
+        ...
+
+    async def tastes(self, pet_id: PetId) -> Mapping[ItemKey, Affinity]:
+        """What the pet's person rated, skipping keys the catalogue no longer holds."""
+        ...
+
+    async def rate(
+        self, pet_id: PetId, item: ItemKey, affinity: Affinity, *, at: datetime
+    ) -> None:
+        """Set the pet's affinity with the item, replacing the one it had."""
         ...
 
 

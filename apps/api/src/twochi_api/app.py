@@ -10,10 +10,20 @@ from twochi_api import problems
 from twochi_api.auth import AUTH_HEADER, Principal, TokenVerifier
 from twochi_api.care import CareActionIn, CareActionOut, care_command, care_out
 from twochi_api.home import HomeOut, home_out
+from twochi_api.tastes import (
+    TasteIn,
+    TasteOut,
+    TastesOut,
+    rate_command,
+    taste_out,
+    tastes_out,
+)
 from twochi_application.actors import UserActor
 from twochi_application.care import apply_care_action
 from twochi_application.home import get_home
 from twochi_application.ports import Clock, Database
+from twochi_application.tastes import get_my_tastes, rate_taste
+from twochi_domain.catalog import ActivityKey, FoodKey
 from twochi_domain.ids import UserId
 
 
@@ -74,6 +84,23 @@ def create_app(verifier: TokenVerifier, *, db: Database, clock: Clock) -> FastAP
     ) -> CareActionOut:
         command = care_command(_actor(who), pet_id, body)
         return care_out(await apply_care_action(command, db=db, clock=clock))
+
+    # Only the caller's own tastes: no route reads those of the pet they care for,
+    # which they discover by caring (ADR 0015).
+    @app.get("/api/tastes/me")
+    async def my_tastes(  # pyright: ignore[reportUnusedFunction]
+        who: Annotated[Principal, Depends(principal)],
+    ) -> TastesOut:
+        return tastes_out(await get_my_tastes(_actor(who), db=db))
+
+    @app.put("/api/tastes/me/{item_key}")
+    async def rate(  # pyright: ignore[reportUnusedFunction]
+        item_key: FoodKey | ActivityKey,
+        body: TasteIn,
+        who: Annotated[Principal, Depends(principal)],
+    ) -> TasteOut:
+        command = rate_command(_actor(who), item_key, body)
+        return taste_out(await rate_taste(command, db=db, clock=clock))
 
     return app
 

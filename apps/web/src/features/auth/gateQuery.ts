@@ -55,7 +55,9 @@ function isSamePersonInside(before: Gate | undefined, gate: Gate): boolean {
   return before?.step !== "ready" || before.userId === gate.userId;
 }
 
-// Whatever one person loaded must never be shown to the next one on this device.
+// Whatever one person loaded must never be shown to the next one on this device, and
+// nothing they wrote may be retried with the next one's token.
 function forgetPerson(queryClient: QueryClient): void {
   queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== AUTH_SCOPE });
+  queryClient.getMutationCache().clear();
 }

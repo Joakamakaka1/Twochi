@@ -90,6 +90,9 @@ _Evitar_: juego (es el juego entero)
 Cuánto le gusta a una mascota una comida o una actividad, de −2 a 2. La pone la persona a la que representa; lo que no ha puntuado vale 0. Cuanto más le gusta, más sube la necesidad, y lo que le encanta también le da cariño.
 _Evitar_: preferencia, valoración
 
+**Tus gustos** (`tastes`):
+La pantalla donde cada persona puntúa, con cinco caras, la afinidad de la mascota que la representa con cada objeto del catálogo. Se abre desde la cabecera y solo enseña los gustos propios: los de la mascota que cuidas se descubren cuidándola.
+
 **Gusto descubierto** (`discovered`):
 Una comida o una actividad que el cuidador ya ha dado a su mascota, con la reacción que vio entonces. El cuidador no ve la afinidad: la descubre cuidando.
 
