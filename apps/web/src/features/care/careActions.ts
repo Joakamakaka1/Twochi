@@ -36,11 +36,34 @@ function currentHome(queryClient: QueryClient) {
   return queryClient.getQueryCache().find<Home>({ queryKey: HOME_KEY, exact: true });
 }
 
-// The mutation keeps the tap as its variables, so each retry sends the same key.
+const CARE_ACTION_KEY = ["care-action"] as const;
+
+// A tap whose person has left: the gate emptied the mutation cache, and sending it again
+// would go out with the next person's token.
+class LeftBehindError extends Error {
+  constructor() {
+    super("The person who tapped this has left");
+    this.name = "LeftBehindError";
+  }
+}
+
+function isStillWanted(queryClient: QueryClient, tap: CareTap): boolean {
+  return queryClient
+    .getMutationCache()
+    .findAll({ mutationKey: CARE_ACTION_KEY })
+    .some((mutation) => mutation.state.variables === tap);
+}
+
+// The mutation keeps the tap as its variables, so each retry sends the same key. Each
+// attempt first checks the tap is still in the mutation cache.
 export function careActionMutation(api: ApiClient, petId: Pet["id"], queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: (tap: CareTap) => sendCareAction(api, petId, tap),
-    retry: retryApiWrite,
+    mutationKey: CARE_ACTION_KEY,
+    mutationFn: (tap: CareTap) => {
+      if (!isStillWanted(queryClient, tap)) return Promise.reject(new LeftBehindError());
+      return sendCareAction(api, petId, tap);
+    },
+    retry: (failureCount, error) => !(error instanceof LeftBehindError) && retryApiWrite(failureCount, error),
     onMutate: async () => {
       // A read of Casa in flight would answer with the pet before this action.
       await queryClient.cancelQueries({ queryKey: HOME_KEY });
