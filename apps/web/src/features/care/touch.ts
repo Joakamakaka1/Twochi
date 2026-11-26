@@ -1,3 +1,5 @@
+import type { CareAction, CareActionResult } from "../../shared";
+
 /** The longest pause between two touches on the figure for them to be one burst. */
 export const BURST_GAP_MS = 500;
 
@@ -17,7 +19,9 @@ interface Burst {
 }
 
 function nextTouch(burst: Burst | null, at: number): { burst: Burst; touch: Touch } {
-  const continues = burst !== null && at - burst.last <= BURST_GAP_MS;
+  // A clock that went back starts a new burst rather than stretching this one.
+  const gap = burst === null ? Infinity : at - burst.last;
+  const continues = burst !== null && gap >= 0 && gap <= BURST_GAP_MS;
   const touches = continues ? burst.touches + 1 : 1;
   const touch = touches === 1 ? "pet" : touches < TICKLES_FROM ? "nothing" : "tickle";
   return { burst: { touches, last: at }, touch };
@@ -31,6 +35,14 @@ export function classifyTouches(instants: readonly number[]): Touch[] {
     burst = next.burst;
     return next.touch;
   });
+}
+
+/**
+ * Whether the engine's answer adds nothing to a giggle in course: a petting it applied,
+ * which the first touch of the burst asked for. A refusal or a change of health is news.
+ */
+export function quietDuringTickles(action: CareAction, result: CareActionResult): boolean {
+  return action === "pet" && result.applied && result.sickness === null;
 }
 
 /** What touching the figure does: pet through the API, or tickle on screen only. */

@@ -1,7 +1,8 @@
 import type { Animation, PetSceneHandle } from "../../scene";
 import type { CareAction, CareActionResult } from "../../shared";
-import { changeRest, openStage, react, reactionAnimation, tick, TICKLE_ANIMATION } from "./petAnimation";
+import { changeRest, openStage, react, REACTION_MS, reactionAnimation, tick, TICKLE_ANIMATION } from "./petAnimation";
 import type { PetStage, StageStep } from "./petAnimation";
+import { quietDuringTickles } from "./touch";
 
 /** What drives the pet's scene: its rest, its reactions, and the scene itself. */
 export interface StageDriver {
@@ -9,7 +10,10 @@ export interface StageDriver {
   attach: (scene: PetSceneHandle | null) => void;
   rest: (animation: Animation) => void;
   react: (action: CareAction, result: CareActionResult) => void;
-  /** A tickle on the figure: a giggle, which the next tickle starts again. */
+  /**
+   * A tickle on the figure: a giggle, which the next tickle starts again and the answer
+   * to the burst's petting does not cut.
+   */
   tickle: () => void;
   stop: () => void;
 }
@@ -20,6 +24,8 @@ export function createStageDriver(): StageDriver {
   let scene: PetSceneHandle | null = null;
   let stage: PetStage | null = null;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  // Until when the last tickle's giggle plays, unless another reaction took its place.
+  let gigglingUntil = 0;
 
   function apply(step: StageStep) {
     stage = step.stage;
@@ -42,10 +48,17 @@ export function createStageDriver(): StageDriver {
       apply(stage === null ? openStage(animation) : changeRest(stage, animation));
     },
     react: (action, result) => {
-      if (stage !== null) apply(react(stage, reactionAnimation(action, result), Date.now()));
+      if (stage === null) return;
+      const now = Date.now();
+      if (now < gigglingUntil && quietDuringTickles(action, result)) return;
+      gigglingUntil = 0;
+      apply(react(stage, reactionAnimation(action, result), now));
     },
     tickle: () => {
-      if (stage !== null) apply(react(stage, TICKLE_ANIMATION, Date.now()));
+      if (stage === null) return;
+      const now = Date.now();
+      gigglingUntil = now + REACTION_MS;
+      apply(react(stage, TICKLE_ANIMATION, now));
     },
     stop: () => {
       clearTimeout(timer);

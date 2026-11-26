@@ -33,7 +33,11 @@ function stateOf(pet: { mood?: Mood; asleep?: boolean; needs?: Partial<NeedValue
   return { pet: full, bars: needBars(full, new Date(NOW)), now: NOW };
 }
 
-function outcome(action: CareAction, result: Partial<CareActionResult>, at = NOW): LastOutcome {
+function outcome(
+  action: CareAction,
+  result: Partial<CareActionResult>,
+  at = NOW,
+): Extract<LastOutcome, { result: CareActionResult }> {
   const applied: CareActionResult = {
     applied: true,
     rejection: null,

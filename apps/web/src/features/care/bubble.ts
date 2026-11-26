@@ -2,6 +2,7 @@ import { phrases, texts } from "../../shared";
 import type { CareAction, CareActionResult, Mood, Need, Pet } from "../../shared";
 import { lowestNeed, mostUrgent } from "./needBars";
 import type { NeedBar } from "./needBars";
+import { quietDuringTickles } from "./touch";
 
 /** How long the pet talks about what just happened before its state takes the bubble back. */
 export const BUBBLE_MS = 4000;
@@ -31,6 +32,16 @@ export function currentOutcome(last: LastOutcome | null, now: number): LastOutco
 export function tickled(last: LastOutcome | null, at: number): LastOutcome {
   const outcome = currentOutcome(last, at);
   return outcome?.action === "tickle" ? outcome : { action: "tickle", at };
+}
+
+/**
+ * The outcome after the engine answered `action` at `at`: the giggle in course when the
+ * answer adds nothing to it (quietDuringTickles), the answer otherwise.
+ */
+export function heard(last: LastOutcome | null, action: CareAction, result: CareActionResult, at: number): LastOutcome {
+  const outcome = currentOutcome(last, at);
+  if (outcome?.action === "tickle" && quietDuringTickles(action, result)) return outcome;
+  return { action, result, at };
 }
 
 /** Whether the pet is still talking about having healed: it celebrates meanwhile. */
