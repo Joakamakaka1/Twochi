@@ -194,6 +194,18 @@
   },
   "components": {
     "schemas": {
+      "Affinity": {
+        "type": "integer",
+        "enum": [
+          -2,
+          -1,
+          0,
+          1,
+          2
+        ],
+        "title": "Affinity",
+        "description": "How much a pet likes an item, from -2 to 2; what was never rated is neutral."
+      },
       "CareAction": {
         "type": "string",
         "enum": [
@@ -216,6 +228,16 @@
             "type": "string",
             "pattern": "^[A-Za-z0-9_-]{1,64}$",
             "title": "Idempotency Key"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemKey"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -252,6 +274,26 @@
             "type": "object",
             "title": "Deltas"
           },
+          "reaction": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReactionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sickness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SicknessChange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "pet": {
             "$ref": "#/components/schemas/PetOut"
           }
@@ -261,10 +303,12 @@
           "applied",
           "rejection",
           "deltas",
+          "reaction",
+          "sickness",
           "pet"
         ],
         "title": "CareActionOut",
-        "description": "Applied with its deltas, or refused with its reason; the pet as it is now."
+        "description": "Applied with its deltas, or refused with its reason; the pet as it is now.\n\n`reaction` comes with feeding and playing; `sickness` when the action left the pet\nsick or healed it."
       },
       "HTTPValidationError": {
         "properties": {
@@ -311,6 +355,31 @@
         ],
         "title": "HomeOut",
         "description": "The pet the caller cares for, or null until both people have arrived."
+      },
+      "ItemKey": {
+        "type": "string",
+        "enum": [
+          "tortilla",
+          "paella",
+          "pizza",
+          "burger",
+          "sushi",
+          "pasta",
+          "tacos",
+          "salad",
+          "broccoli",
+          "strawberries",
+          "ice_cream",
+          "chocolate",
+          "ball",
+          "video_games",
+          "dance",
+          "reading",
+          "drawing",
+          "puzzle"
+        ],
+        "title": "ItemKey",
+        "description": "The stable key of each item of the catalogue."
       },
       "Mood": {
         "type": "string",
@@ -459,6 +528,23 @@
         ],
         "title": "PingResponse"
       },
+      "ReactionOut": {
+        "properties": {
+          "item_key": {
+            "$ref": "#/components/schemas/ItemKey"
+          },
+          "affinity": {
+            "$ref": "#/components/schemas/Affinity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "affinity"
+        ],
+        "title": "ReactionOut",
+        "description": "How the pet took what it was given: the item and its affinity right then."
+      },
       "Rejection": {
         "type": "string",
         "enum": [
@@ -470,6 +556,15 @@
         ],
         "title": "Rejection",
         "description": "Why the engine refused a care action; the front animates it."
+      },
+      "SicknessChange": {
+        "type": "string",
+        "enum": [
+          "fell_sick",
+          "healed"
+        ],
+        "title": "SicknessChange",
+        "description": "An action that left the pet sick, or healed it; the event keeps it."
       },
       "ValidationError": {
         "properties": {

@@ -77,6 +77,12 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * Affinity
+         * @description How much a pet likes an item, from -2 to 2; what was never rated is neutral.
+         * @enum {integer}
+         */
+        Affinity: -2 | -1 | 0 | 1 | 2;
+        /**
          * CareAction
          * @description What the caretaker can do to their pet from the interface.
          * @enum {string}
@@ -90,10 +96,14 @@ export interface components {
             action: components["schemas"]["CareAction"];
             /** Idempotency Key */
             idempotency_key: string;
+            item_key?: components["schemas"]["ItemKey"] | null;
         };
         /**
          * CareActionOut
          * @description Applied with its deltas, or refused with its reason; the pet as it is now.
+         *
+         *     `reaction` comes with feeding and playing; `sickness` when the action left the pet
+         *     sick or healed it.
          */
         CareActionOut: {
             /** Applied */
@@ -103,6 +113,8 @@ export interface components {
             deltas: {
                 [key: string]: number;
             };
+            reaction: components["schemas"]["ReactionOut"] | null;
+            sickness: components["schemas"]["SicknessChange"] | null;
             pet: components["schemas"]["PetOut"];
         };
         /** HTTPValidationError */
@@ -122,6 +134,12 @@ export interface components {
         HomeOut: {
             pet: components["schemas"]["PetOut"] | null;
         };
+        /**
+         * ItemKey
+         * @description The stable key of each item of the catalogue.
+         * @enum {string}
+         */
+        ItemKey: "tortilla" | "paella" | "pizza" | "burger" | "sushi" | "pasta" | "tacos" | "salad" | "broccoli" | "strawberries" | "ice_cream" | "chocolate" | "ball" | "video_games" | "dance" | "reading" | "drawing" | "puzzle";
         /**
          * Mood
          * @description What the pet shows, from the average of its needs.
@@ -189,11 +207,25 @@ export interface components {
             nonce: string;
         };
         /**
+         * ReactionOut
+         * @description How the pet took what it was given: the item and its affinity right then.
+         */
+        ReactionOut: {
+            item_key: components["schemas"]["ItemKey"];
+            affinity: components["schemas"]["Affinity"];
+        };
+        /**
          * Rejection
          * @description Why the engine refused a care action; the front animates it.
          * @enum {string}
          */
         Rejection: "not_caretaker" | "asleep" | "already_asleep" | "already_awake" | "too_tired";
+        /**
+         * SicknessChange
+         * @description An action that left the pet sick, or healed it; the event keeps it.
+         * @enum {string}
+         */
+        SicknessChange: "fell_sick" | "healed";
         /** ValidationError */
         ValidationError: {
             /** Location */
