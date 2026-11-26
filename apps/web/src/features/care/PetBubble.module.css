@@ -1,0 +1,38 @@
+/* Over the pet's head, centred on the stage; taps go through to the figure. */
+.slot {
+  position: absolute;
+  inset: var(--space-4) var(--space-5) auto;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.bubble {
+  position: relative;
+  max-width: 100%;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  font-weight: var(--weight-strong);
+  text-align: center;
+  animation: pop calc(var(--motion-quick) * 2) var(--motion-ease);
+}
+
+/* The tail, pointing down at the pet. */
+.bubble::after {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: var(--space-2) solid transparent;
+  border-top-color: var(--color-surface);
+  content: "";
+  translate: -50% 0;
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    scale: 0.8;
+  }
+}

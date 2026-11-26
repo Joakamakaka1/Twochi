@@ -1,0 +1,5 @@
+/* The figure fills the place the page gives it; taps on it are quick, without the double-tap zoom wait. */
+.figure {
+  height: 100%;
+  touch-action: manipulation;
+}

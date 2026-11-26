@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500">
+  <!-- Placeholder bedroom with the light on: a bed, a lamp and a window by day. bedroom-dark.svg is the same room while the pet sleeps. The real art replaces both in roomBackdrop.ts. -->
+  <defs>
+    <pattern id="dots" width="44" height="44" patternUnits="userSpaceOnUse">
+      <rect width="44" height="44" fill="#e7def8"/>
+      <circle cx="11" cy="11" r="3" fill="#d6c8f2"/>
+      <circle cx="33" cy="33" r="3" fill="#d6c8f2"/>
+    </pattern>
+  </defs>
+  <rect width="600" height="310" fill="url(#dots)"/>
+  <rect y="310" width="600" height="190" fill="#c7b6e6"/>
+  <rect y="300" width="600" height="14" fill="#b29fdb"/>
+  <!-- Window by day -->
+  <rect x="380" y="40" width="150" height="120" rx="16" fill="#cfeefc" stroke="#ffffff" stroke-width="10"/>
+  <path d="M455 40v120M380 100h150" stroke="#ffffff" stroke-width="8"/>
+  <circle cx="420" cy="72" r="14" fill="#fff0b8"/>
+  <path d="M470 132c0-10 18-12 22-4 8-4 22 2 18 12h-40z" fill="#ffffff"/>
+  <path d="M370 34h170" stroke="#f7a8c0" stroke-width="10" stroke-linecap="round"/>
+  <path d="M376 38c0 50 8 100 20 130h-24z" fill="#f7c4d4"/>
+  <path d="M534 38c0 50-8 100-20 130h24z" fill="#f7c4d4"/>
+  <!-- Rug -->
+  <ellipse cx="300" cy="410" rx="200" ry="50" fill="#f9d6e3"/>
+  <!-- Bed -->
+  <rect x="0" y="150" width="34" height="210" rx="14" fill="#a5795a"/>
+  <rect x="0" y="236" width="220" height="74" rx="18" fill="#ffffff"/>
+  <path d="M0 250h200c14 0 22 10 22 22v60c0 14-10 22-22 22H0z" fill="#b7a0ee"/>
+  <path d="M60 262h150" stroke="#d8c9fa" stroke-width="8" stroke-linecap="round"/>
+  <rect x="40" y="206" width="90" height="44" rx="20" fill="#fff8ee" stroke="#e7def8" stroke-width="4"/>
+  <rect x="200" y="300" width="20" height="60" rx="8" fill="#a5795a"/>
+  <!-- Nightstand and lamp -->
+  <rect x="470" y="250" width="100" height="96" rx="14" fill="#e8cfa8"/>
+  <path d="M480 298h80" stroke="#cfae84" stroke-width="4"/>
+  <circle cx="520" cy="320" r="5" fill="#a5795a"/>
+  <circle cx="520" cy="200" r="58" fill="#fff0b8" opacity="0.6"/>
+  <rect x="514" y="200" width="12" height="50" rx="6" fill="#a5795a"/>
+  <path d="M484 206h72l-14-46h-44z" fill="#ffe27a" stroke="#f2d48a" stroke-width="4"/>
+</svg>

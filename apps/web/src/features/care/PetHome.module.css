@@ -1,0 +1,157 @@
+/* Casa fills the column top to bottom, the stage taking whatever height is left. */
+.home {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.name {
+  font-size: var(--text-xl);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-strong);
+}
+
+.chip[data-mood="happy"] {
+  background: var(--color-secondary);
+}
+
+.chip[data-mood="sad"] {
+  background: var(--color-quiet);
+}
+
+.chip[data-mood="sick"] {
+  background: var(--color-alert-soft);
+  color: var(--color-alert);
+}
+
+.chip[data-asleep] {
+  background: var(--color-ink);
+  color: var(--color-surface);
+}
+
+/* The room: its backdrop at the back, the transparent scene over it, the bubble on top. */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 40dvh;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center bottom;
+  animation: fade-in calc(var(--motion-quick) * 3) ease-out;
+}
+
+.scene {
+  position: absolute;
+  inset: 0;
+}
+
+.failure {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.failure > [role="alert"] {
+  flex: 1;
+}
+
+.retry {
+  --button-fill: var(--color-quiet);
+  --button-edge: var(--color-quiet-edge);
+}
+
+/* The room's care: big buttons, side by side, for the thumb. */
+.care {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.careButton {
+  flex: 1;
+  min-width: 0;
+  padding-inline: var(--space-3);
+}
+
+.careButton[aria-disabled="true"] {
+  opacity: var(--disabled-opacity);
+  cursor: progress;
+}
+
+.careButton[aria-disabled="true"]:active {
+  transform: none;
+  box-shadow: 0 var(--press-depth) 0 var(--button-edge);
+}
+
+.careIcon {
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+/* The room bar at the bottom: four tiles, the current one pressed. */
+.rooms {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.room {
+  --button-fill: var(--color-surface);
+  --button-edge: var(--color-line);
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--space-1);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.room[aria-pressed="true"] {
+  --button-fill: var(--color-secondary);
+  --button-edge: var(--color-secondary-edge);
+}
+
+.roomIcon {
+  font-size: var(--text-xl);
+  line-height: 1;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}

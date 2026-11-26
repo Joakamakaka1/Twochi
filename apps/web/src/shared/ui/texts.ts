@@ -36,6 +36,8 @@ export const texts = {
     needs: { hunger: "Hambre", energy: "Energía", hygiene: "Higiene", fun: "Diversión", affection: "Cariño" },
     // Next to a need under 30: the pet asks for it.
     asksFor: "la pide",
+    // Read out with the need the pet asks for most, the one Casa highlights.
+    asksForMost: "la que más pide",
     roomsTitle: "Habitaciones",
     rooms: { kitchen: "Cocina", bathroom: "Baño", bedroom: "Dormitorio", living_room: "Salón" },
     actions: {

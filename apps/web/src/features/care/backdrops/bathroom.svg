@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 500">
+  <!-- Placeholder bathroom: tiles, a mirror and sink, and a bathtub with bubbles. The real art replaces this file in roomBackdrop.ts. -->
+  <defs>
+    <pattern id="tiles" width="36" height="36" patternUnits="userSpaceOnUse">
+      <rect width="36" height="36" fill="#eefbfc"/>
+      <path d="M0 0H36V36" fill="none" stroke="#bfe3ea" stroke-width="3"/>
+    </pattern>
+    <pattern id="floor" width="50" height="50" patternUnits="userSpaceOnUse">
+      <rect width="50" height="50" fill="#b9dfe7"/>
+      <rect width="25" height="25" fill="#d3eef2"/>
+      <rect x="25" y="25" width="25" height="25" fill="#d3eef2"/>
+    </pattern>
+  </defs>
+  <rect width="600" height="310" fill="#d5f0f3"/>
+  <rect y="120" width="600" height="190" fill="url(#tiles)"/>
+  <rect y="310" width="600" height="190" fill="url(#floor)"/>
+  <rect y="304" width="600" height="10" fill="#9fcdd8"/>
+  <!-- Mirror and sink -->
+  <ellipse cx="100" cy="130" rx="54" ry="68" fill="#e9f8ff" stroke="#f7c4d4" stroke-width="8"/>
+  <path d="M74 104l30-26M84 132l40-36" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+  <rect x="88" y="236" width="24" height="96" rx="10" fill="#ffffff" stroke="#bfe3ea" stroke-width="4"/>
+  <path d="M40 214h120c0 22-26 34-60 34s-60-12-60-34z" fill="#ffffff" stroke="#bfe3ea" stroke-width="4"/>
+  <rect x="96" y="196" width="8" height="20" rx="4" fill="#9fcdd8"/>
+  <!-- Towel -->
+  <rect x="190" y="150" width="56" height="8" rx="4" fill="#9fcdd8"/>
+  <rect x="196" y="156" width="44" height="74" rx="10" fill="#f7c4d4"/>
+  <path d="M196 214h44" stroke="#ffffff" stroke-width="5"/>
+  <!-- Bathtub -->
+  <path d="M380 250h230v40c0 34-28 58-62 58H442c-34 0-62-24-62-58z" fill="#ffffff" stroke="#bfe3ea" stroke-width="5"/>
+  <rect x="370" y="238" width="250" height="20" rx="10" fill="#ffffff" stroke="#bfe3ea" stroke-width="5"/>
+  <rect x="420" y="344" width="14" height="22" rx="6" fill="#f2d48a"/>
+  <rect x="570" y="344" width="14" height="22" rx="6" fill="#f2d48a"/>
+  <g fill="#ffffff" stroke="#d5eef3" stroke-width="3">
+    <circle cx="420" cy="226" r="20"/>
+    <circle cx="452" cy="216" r="24"/>
+    <circle cx="490" cy="224" r="18"/>
+    <circle cx="560" cy="222" r="22"/>
+    <circle cx="470" cy="180" r="9"/>
+    <circle cx="540" cy="170" r="6"/>
+  </g>
+  <!-- Duck -->
+  <path d="M510 222c0-14 10-22 22-22s20 10 18 20l14 2c4 14-8 26-30 26h-10c-10 0-14-14-14-26z" fill="#ffe27a"/>
+  <path d="M548 216l14 4-12 6z" fill="#f4a86b"/>
+  <circle cx="536" cy="210" r="3" fill="#47355e"/>
+  <!-- Shower head -->
+  <path d="M560 40V110h-30" fill="none" stroke="#9fcdd8" stroke-width="8" stroke-linecap="round"/>
+  <path d="M508 110h44l-8 16h-28z" fill="#9fcdd8"/>
+</svg>
