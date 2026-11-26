@@ -15,6 +15,7 @@ Lo natural sería una política por persona, como las de conversaciones y memori
 - `item_affinities` lleva la política de pareja: la leen las dos personas.
 - Solo escribe la persona representada: el `insert` y el `update` exigen que la mascota la represente a ella.
 - La API es la que oculta. Devuelve la lista de gustos solo a la persona representada; al cuidador le llega lo que ve jugando, la reacción de cada comida o actividad que da.
+- `PUT /api/tastes/me/{item_key}` no lleva clave de idempotencia, aunque la convención pide una en toda escritura: fija un valor, así que repetirlo deja lo mismo.
 
 ## Alternativas descartadas
 
