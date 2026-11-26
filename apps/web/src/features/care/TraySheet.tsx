@@ -2,12 +2,15 @@ import { useEffect, useId, useRef } from "react";
 
 import { texts } from "../../shared";
 import type { ItemKey } from "../../shared";
+import { returnFocus } from "./sheetFocus";
 import { trayFor } from "./tray";
 import type { TrayAction } from "./tray";
 import styles from "./TraySheet.module.css";
 
 interface TraySheetProps {
   action: TrayAction;
+  /** The button that opened the sheet: focus goes back to it when the sheet goes. */
+  opener: HTMLElement | null;
   onChoose: (item: ItemKey) => void;
   /** The sheet closed, with an item chosen or without. */
   onClose: () => void;
@@ -15,10 +18,11 @@ interface TraySheetProps {
 
 /**
  * The tray as a sheet that rises from the bottom: a modal `dialog`, so focus moves into
- * it when it opens, stays there, and goes back to the button that opened it when it
- * closes. It closes without choosing with its button, Escape or a tap outside it.
+ * it when it opens and stays there. It closes without choosing with its button, Escape
+ * or a tap outside it; however it goes, even removed while open, focus goes back to the
+ * button that opened it.
  */
-export function TraySheet({ action, onChoose, onClose }: TraySheetProps) {
+export function TraySheet({ action, opener, onChoose, onClose }: TraySheetProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
 
@@ -27,7 +31,12 @@ export function TraySheet({ action, onChoose, onClose }: TraySheetProps) {
     // a cleanup would fire `close` and shut the tray as soon as it opened.
     const sheet = dialog.current;
     if (sheet !== null && !sheet.open) sheet.showModal();
-  }, []);
+    // Every way out ends here, as closing unmounts the sheet (onClose). While the sheet
+    // is still open, as in StrictMode's extra cleanup, the opener is inert and keeps none.
+    return () => {
+      returnFocus(opener);
+    };
+  }, [opener]);
 
   const close = () => {
     dialog.current?.close();

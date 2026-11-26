@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useState } from "react";
+import type { MouseEvent } from "react";
 
 import { texts } from "../../shared";
 import type { CareAction, Pet } from "../../shared";
@@ -25,8 +26,9 @@ const PetScene = lazy(() => import("../../scene").then((scene) => ({ default: sc
 // backdrop, the pet and its bubble in the middle; the room's care above the room bar.
 export function PetHome({ pet }: { pet: Pet }) {
   const [room, setRoom] = useState<Room>("kitchen");
-  // Feeding and playing first open a tray to choose what to give.
-  const [tray, setTray] = useState<TrayAction | null>(null);
+  // Feeding and playing first open a tray to choose what to give; the button that opened
+  // it gets the focus back when it goes.
+  const [tray, setTray] = useState<{ action: TrayAction; opener: HTMLElement } | null>(null);
   const now = useNow(TICK_MS);
   const { attach, react } = usePetStage(pet);
   const care = useCareActions(pet.id, react);
@@ -36,12 +38,13 @@ export function PetHome({ pet }: { pet: Pet }) {
     tap("pet");
   }, [tap]);
   const actions = ROOMS.find((each) => each.room === room)?.actions ?? [];
+  const backdrop = roomBackdrop(room, pet);
 
   // While a tap is in flight the buttons say so but stay focusable (aria-disabled), so
   // focus can go back to the one that opened the tray; the taps' own lock drops the tap.
-  const careButton = (action: CareAction) => () => {
+  const careButton = (action: CareAction) => (event: MouseEvent<HTMLButtonElement>) => {
     if (care.isPending) return;
-    if (opensTray(action)) setTray(action);
+    if (opensTray(action)) setTray({ action, opener: event.currentTarget });
     else care.tap(action);
   };
 
@@ -63,7 +66,7 @@ export function PetHome({ pet }: { pet: Pet }) {
 
       <div className={styles.stage}>
         {/* Keyed by the picture, so a new room or the light going off fades in. */}
-        <img key={roomBackdrop(room, pet)} className={styles.backdrop} src={roomBackdrop(room, pet)} alt="" />
+        <img key={backdrop} className={styles.backdrop} src={backdrop} alt="" />
         <div className={styles.scene}>
           <Suspense fallback={null}>
             <PetScene ref={attach} label={texts.care.petFigure(pet.name)} onTap={petByTouch} />
@@ -119,9 +122,10 @@ export function PetHome({ pet }: { pet: Pet }) {
 
       {tray !== null && (
         <TraySheet
-          action={tray}
+          action={tray.action}
+          opener={tray.opener}
           onChoose={(item) => {
-            care.tap(tray, item);
+            care.tap(tray.action, item);
           }}
           onClose={() => {
             setTray(null);
