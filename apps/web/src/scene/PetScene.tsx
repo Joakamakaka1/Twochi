@@ -1,5 +1,5 @@
 import { Canvas } from "@react-three/fiber";
-import { memo, useImperativeHandle, useRef, useState } from "react";
+import { memo, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Ref } from "react";
 
 import type { Animation, Playing } from "./clips";
@@ -17,6 +17,8 @@ interface PetSceneProps {
   label: string;
   /** Touching the figure; the same care has its own button outside the canvas. */
   onTap?: (() => void) | undefined;
+  /** The pet is sick: another colour, and it shivers whatever clip it plays. */
+  sick?: boolean;
 }
 
 // Phones report a pixel ratio of 3 or more; past 2 it costs memory and frames, not detail.
@@ -30,7 +32,7 @@ const LOOK_AT = [0, 0.6, 0] as const;
 // backdrop) shows through. Seam: a rigged GLB replaces PlaceholderPet reading the same
 // `playing` ref (useGLTF and useAnimations, cross-fading to actions[animation]).
 // Memoised: Casa re-renders every second for the need bars, and the scene needs none of it.
-export const PetScene = memo(function PetScene({ ref, label, onTap }: PetSceneProps) {
+export const PetScene = memo(function PetScene({ ref, label, onTap, sick = false }: PetSceneProps) {
   const playing = useRef<Playing>({ animation: "idle", startedAt: 0 });
   useImperativeHandle(
     ref,
@@ -41,6 +43,7 @@ export const PetScene = memo(function PetScene({ ref, label, onTap }: PetScenePr
     }),
     [],
   );
+  const reducedMotion = useReducedMotion();
 
   return (
     <div role="img" aria-label={label} className={styles.figure}>
@@ -56,11 +59,30 @@ export const PetScene = memo(function PetScene({ ref, label, onTap }: PetScenePr
         <ambientLight intensity={1.2} />
         <directionalLight position={[2, 4, 3]} intensity={2} />
         <GroundShadow />
-        <PlaceholderPet playing={playing} onTap={onTap} />
+        <PlaceholderPet playing={playing} onTap={onTap} sick={sick} reducedMotion={reducedMotion} />
       </Canvas>
     </div>
   );
 });
+
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+// Whether the system asks for less motion, following it while the scene is open. The
+// page's CSS stops its own animations (base.css); the scene softens its motion itself.
+function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(() => window.matchMedia(REDUCED_MOTION).matches);
+  useEffect(() => {
+    const query = window.matchMedia(REDUCED_MOTION);
+    const follow = () => {
+      setReduced(query.matches);
+    };
+    query.addEventListener("change", follow);
+    return () => {
+      query.removeEventListener("change", follow);
+    };
+  }, []);
+  return reduced;
+}
 
 // The value of a CSS token (tokens.css), as WebGL needs it: it cannot read var().
 function tokenValue(name: string): string {
