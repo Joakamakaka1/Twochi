@@ -19,6 +19,7 @@ from twochi_application.care import (
 from twochi_application.home import get_home
 from twochi_application.testing import FixedClock
 from twochi_data.database import PostgresDatabase
+from twochi_data.events import UnexpectedPayloadError
 from twochi_domain.care import CareAction, Reaction, Rejection, SicknessChange
 from twochi_domain.catalog import Affinity, InvalidItemError, ItemKey
 from twochi_domain.ids import PetId
@@ -561,3 +562,22 @@ async def test_healing_is_noted(couples: Couples, db: PostgresDatabase) -> None:
     assert healed.sickness is SicknessChange.HEALED
     assert then.sickness is None
     assert healed.reaction is None
+
+
+@pytest.mark.parametrize("affinity", ["7", "true"])
+async def test_a_stored_reaction_out_of_range_is_a_schema_drift_not_a_crash(
+    couples: Couples, db: PostgresDatabase, affinity: str
+) -> None:
+    couple = await couples.create(updated_at=T0)
+    await couples.admin.execute(
+        "insert into app.pet_events (couple_id, pet_id, actor_user_id, source, action,"
+        " payload, rules_version, idempotency_key) "
+        "values ($1, $2, $3, 'ui', 'feed', $4::jsonb, 'test', 'drifted')",
+        couple.id,
+        couple.pet_of_alice.id,
+        couple.bruno,
+        f'{{"effective": true, "item_key": "pizza", "affinity": {affinity}}}',
+    )
+
+    with pytest.raises(UnexpectedPayloadError):
+        await bruno_cares(db, couple, CareAction.FEED, key="drifted", item="pizza")
