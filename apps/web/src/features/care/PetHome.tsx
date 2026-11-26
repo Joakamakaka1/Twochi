@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import type { MouseEvent } from "react";
 
 import { texts } from "../../shared";
@@ -13,13 +13,13 @@ import styles from "./PetHome.module.css";
 import { roomBackdrop } from "./roomBackdrop";
 import { ROOMS } from "./rooms";
 import type { Room } from "./rooms";
-import { petTouches } from "./touch";
 import { opensTray } from "./tray";
 import type { TrayAction } from "./tray";
 import { TraySheet } from "./TraySheet";
 import { useCareActions, useNow } from "./useHome";
 import { usePetBubble } from "./usePetBubble";
 import { usePetStage } from "./usePetStage";
+import { usePetTouches } from "./usePetTouches";
 
 const TICK_MS = 1000;
 
@@ -36,7 +36,8 @@ export function PetHome({ pet }: { pet: NonNullable<Home["pet"]> }) {
   const now = useNow(TICK_MS);
   const { attach, react, tickle } = usePetStage(pet);
   const { last, luck, hear, hearTickle } = usePetBubble();
-  // Each outcome the engine gives plays its reaction and takes the bubble for a while.
+  // Each outcome the engine gives plays its reaction and takes the bubble for a while,
+  // unless it adds nothing to a giggle in course.
   const onOutcome = useCallback(
     (action: CareAction, result: CareActionResult) => {
       react(action, result);
@@ -45,26 +46,7 @@ export function PetHome({ pet }: { pet: NonNullable<Home["pet"]> }) {
     [react, hear],
   );
   const care = useCareActions(pet.id, onOutcome);
-  const { tap } = care;
-  // The first touch of a burst pets, as the button does; tickles stay on screen.
-  const touches = useMemo(
-    () =>
-      petTouches({
-        pet: () => {
-          tap("pet");
-        },
-        tickle: () => {
-          tickle();
-          hearTickle();
-        },
-      }),
-    [tap, tickle, hearTickle],
-  );
-  // New only when the pet falls asleep or wakes, so the memoised scene skips the bars' tick.
-  const { asleep } = pet;
-  const petByTouch = useCallback(() => {
-    touches(performance.now(), asleep);
-  }, [touches, asleep]);
+  const petByTouch = usePetTouches({ asleep: pet.asleep, tap: care.tap, tickle, hearTickle });
   const actions = ROOMS.find((each) => each.room === room)?.actions ?? [];
   const backdrop = roomBackdrop(room, pet);
   const bars = needBars(pet, now);

@@ -12,28 +12,15 @@ const TICKLES_FROM = 3;
  */
 export type Touch = "pet" | "nothing" | "tickle";
 
-/** The burst going on: how many touches it has had, and when the last one came. */
-interface Burst {
-  touches: number;
-  last: number;
-}
-
-function nextTouch(burst: Burst | null, at: number): { burst: Burst; touch: Touch } {
-  // A clock that went back starts a new burst rather than stretching this one.
-  const gap = burst === null ? Infinity : at - burst.last;
-  const continues = burst !== null && gap >= 0 && gap <= BURST_GAP_MS;
-  const touches = continues ? burst.touches + 1 : 1;
-  const touch = touches === 1 ? "pet" : touches < TICKLES_FROM ? "nothing" : "tickle";
-  return { burst: { touches, last: at }, touch };
-}
-
 /** What each touch on the figure is, from their instants in milliseconds, in order. */
 export function classifyTouches(instants: readonly number[]): Touch[] {
-  let burst: Burst | null = null;
-  return instants.map((at) => {
-    const next = nextTouch(burst, at);
-    burst = next.burst;
-    return next.touch;
+  let inBurst = 0;
+  return instants.map((at, index) => {
+    const before = instants[index - 1];
+    // A clock that went back starts a new burst rather than stretching this one.
+    const continues = before !== undefined && at >= before && at - before <= BURST_GAP_MS;
+    inBurst = continues ? inBurst + 1 : 1;
+    return inBurst === 1 ? "pet" : inBurst < TICKLES_FROM ? "nothing" : "tickle";
   });
 }
 
@@ -57,11 +44,14 @@ export interface TouchHandlers {
  * refuses with a grumble: a sleeping pet feels no tickles.
  */
 export function petTouches(on: TouchHandlers): (at: number, asleep: boolean) => void {
-  let burst: Burst | null = null;
+  // The last touches of the burst going on: enough for classifyTouches to tell the next
+  // one, as from the third on they are all tickles.
+  let burst: readonly number[] = [];
   return (at, asleep) => {
-    const next = nextTouch(burst, at);
-    burst = next.burst;
-    if (next.touch === "pet") on.pet();
-    else if (next.touch === "tickle" && !asleep) on.tickle();
+    const touches = [...burst, at];
+    const touch = classifyTouches(touches).at(-1);
+    burst = touch === "pet" ? [at] : touches.slice(-(TICKLES_FROM - 1));
+    if (touch === "pet") on.pet();
+    else if (touch === "tickle" && !asleep) on.tickle();
   };
 }
