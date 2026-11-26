@@ -14,7 +14,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 # What the Supabase CLI applies from supabase/migrations: any other file it skips.
-_MIGRATION_FILE = re.compile(r"^(?P<migration>\d+_.*)\.sql$")
+_MIGRATION_FILE = re.compile(r"^(?P<migration>(?P<version>[0-9]+)_.*)\.sql$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,18 +39,23 @@ def migration_drift(
 ) -> MigrationDrift | None:
     """How `applied`, as `<version>_<name>`, differs from the migration `files`.
 
-    None when the database holds exactly the repo's migrations.
+    A bare `<version>` is a row whose name is empty (`supabase migration repair`, older
+    CLIs): it matches by version alone. None when the database holds exactly the
+    repo's migrations.
     """
-    migrations = {
-        match["migration"]: file
-        for file in files
-        if (match := _MIGRATION_FILE.match(file))
-    }
+    migrations = [match for file in files if (match := _MIGRATION_FILE.match(file))]
     done = set(applied)
     pending = tuple(
-        sorted(file for name, file in migrations.items() if name not in done)
+        sorted(
+            match.string
+            for match in migrations
+            if match["migration"] not in done and match["version"] not in done
+        )
     )
-    gone = tuple(sorted(done - migrations.keys()))
+    in_repo = {
+        match[group] for match in migrations for group in ("migration", "version")
+    }
+    gone = tuple(sorted(done - in_repo))
     if not pending and not gone:
         return None
     return MigrationDrift(pending=pending, gone=gone)
