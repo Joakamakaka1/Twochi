@@ -2,8 +2,10 @@ import { lazy, Suspense, useCallback, useState } from "react";
 import type { MouseEvent } from "react";
 
 import { texts } from "../../shared";
-import type { CareAction, Home } from "../../shared";
-import { ACTION_ICONS, ROOM_ICONS } from "./icons";
+import type { CareAction, CareActionResult, Home } from "../../shared";
+import { bubbleKey, chooseBubble, currentOutcome } from "./bubble";
+import { Celebration } from "./Celebration";
+import { ACTION_ICONS, ROOM_ICONS, SICK_ICON } from "./icons";
 import { needBars } from "./needBars";
 import { NeedRings } from "./NeedRings";
 import { PetBubble } from "./PetBubble";
@@ -15,6 +17,7 @@ import { opensTray } from "./tray";
 import type { TrayAction } from "./tray";
 import { TraySheet } from "./TraySheet";
 import { useCareActions, useNow } from "./useHome";
+import { usePetBubble } from "./usePetBubble";
 import { usePetStage } from "./usePetStage";
 
 const TICK_MS = 1000;
@@ -31,7 +34,16 @@ export function PetHome({ pet }: { pet: NonNullable<Home["pet"]> }) {
   const [tray, setTray] = useState<{ action: TrayAction; opener: HTMLElement } | null>(null);
   const now = useNow(TICK_MS);
   const { attach, react } = usePetStage(pet);
-  const care = useCareActions(pet.id, react);
+  const { last, luck, hear } = usePetBubble();
+  // Each outcome the engine gives plays its reaction and takes the bubble for a while.
+  const onOutcome = useCallback(
+    (action: CareAction, result: CareActionResult) => {
+      react(action, result);
+      hear(action, result);
+    },
+    [react, hear],
+  );
+  const care = useCareActions(pet.id, onOutcome);
   const { tap } = care;
   // Stable, so the memoised scene skips the bars' tick every second.
   const petByTouch = useCallback(() => {
@@ -39,6 +51,10 @@ export function PetHome({ pet }: { pet: NonNullable<Home["pet"]> }) {
   }, [tap]);
   const actions = ROOMS.find((each) => each.room === room)?.actions ?? [];
   const backdrop = roomBackdrop(room, pet);
+  const bars = needBars(pet, now);
+  const bubble = chooseBubble({ pet, bars, now: now.getTime() }, last, () => luck);
+  const healing = currentOutcome(last, now.getTime())?.result.sickness === "healed";
+  const sick = pet.mood === "sick";
 
   // While a tap is in flight the buttons say so but stay focusable (aria-disabled), so
   // focus can go back to the one that opened the tray; the taps' own lock drops the tap.
@@ -62,17 +78,24 @@ export function PetHome({ pet }: { pet: NonNullable<Home["pet"]> }) {
         </p>
       </header>
 
-      <NeedRings bars={needBars(pet, now)} />
+      <NeedRings bars={bars} />
 
       <div className={styles.stage}>
         {/* Keyed by the picture, so a new room or the light going off fades in. */}
         <img key={backdrop} className={styles.backdrop} src={backdrop} alt="" />
         <div className={styles.scene}>
           <Suspense fallback={null}>
-            <PetScene ref={attach} label={texts.care.petFigure(pet.name)} onTap={petByTouch} />
+            <PetScene ref={attach} label={texts.care.petFigure(pet.name)} onTap={petByTouch} sick={sick} />
           </Suspense>
         </div>
-        <PetBubble text={care.outcome} />
+        {sick && (
+          <span className={styles.sickIcon} aria-hidden="true">
+            {SICK_ICON}
+          </span>
+        )}
+        {/* Keyed by the outcome, so healing twice celebrates twice. */}
+        {healing && last !== null && <Celebration key={last.at} />}
+        <PetBubble text={bubble} id={bubbleKey(last, now.getTime())} />
       </div>
 
       {care.failure !== null && (

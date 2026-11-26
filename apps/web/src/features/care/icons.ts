@@ -27,3 +27,9 @@ export const ACTION_ICONS: Readonly<Record<CareAction, string>> = {
   sleep: "🌙",
   wake: "☀️",
 };
+
+// Next to the sick pet; its mood is already said in words.
+export const SICK_ICON = "🤒";
+
+// The confetti of a pet that healed.
+export const CELEBRATION_ICONS: readonly string[] = ["🎉", "✨", "💖", "⭐", "🎊", "✨"];

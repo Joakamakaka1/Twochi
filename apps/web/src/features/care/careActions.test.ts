@@ -2,11 +2,10 @@ import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError, createApi, texts } from "../../shared";
-import type { Affinity, CareActionResult, Home, ItemKey, Pet } from "../../shared";
+import type { CareActionResult, Home, Pet } from "../../shared";
 import {
   careActionMutation,
   careFailureText,
-  careOutcomeText,
   careTap,
   careTaps,
   onHomeRead,
@@ -124,7 +123,7 @@ describe("care actions", () => {
     expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: { ...FED, discovered: { sushi: 2, pizza: 0 } } });
   });
 
-  it("keeps the pet the response brings when the engine refuses, and says why", async () => {
+  it("keeps the pet the response brings when the engine refuses", async () => {
     const { api } = apiAnswering(() => Response.json(tooTired));
     const { queryClient, observer } = careFor(api);
 
@@ -134,12 +133,7 @@ describe("care actions", () => {
       expect(observer.getCurrentResult().isSuccess).toBe(true);
     });
     expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: { ...BRU, discovered: { sushi: 2 } } });
-    expect(careOutcomeText(observer.getCurrentResult().data)).toBe(texts.care.rejections.too_tired);
-  });
-
-  it("says nothing when an action without an item was applied or nothing was tapped yet", () => {
-    expect(careOutcomeText(bathed)).toBeNull();
-    expect(careOutcomeText(undefined)).toBeNull();
+    expect(observer.getCurrentResult().data).toEqual(tooTired);
   });
 
   it("sends the item the carer chose from the tray with the tap", async () => {
@@ -158,21 +152,6 @@ describe("care actions", () => {
     await observer.mutate(careTap("bathe"));
 
     expect(sent[0]?.body).not.toHaveProperty("item_key");
-  });
-});
-
-describe("the text of a reaction", () => {
-  const took = (item_key: ItemKey, affinity: Affinity): CareActionResult => ({
-    ...applied,
-    reaction: { item_key, affinity },
-  });
-
-  it("says how the pet took each food or activity it was given", () => {
-    expect(careOutcomeText(took("tortilla", 2))).toBe("Tortilla: ¡le encanta!");
-    expect(careOutcomeText(took("pizza", 1))).toBe("Pizza: le gusta.");
-    expect(careOutcomeText(took("dance", 0))).toBe("Bailar: ni fu ni fa.");
-    expect(careOutcomeText(took("reading", -1))).toBe("Leer: no le gusta mucho.");
-    expect(careOutcomeText(took("broccoli", -2))).toBe("Brócoli: ¡puaj, qué asco! Pero se lo toma.");
   });
 });
 
@@ -235,34 +214,22 @@ describe("a care action answered after the person left", () => {
 
     expect(queryClient.getQueryData(HOME_KEY)).toEqual({ pet: null });
   });
-});
 
-describe("the text of a refusal", () => {
-  it("stays after the response moves the bars, and goes when Casa is read again", async () => {
-    const { api } = apiAnswering(() => Response.json(tooTired), () => Response.json({ pet: BRU }));
+  it("is not sent again once the gate forgot the person's writes", async () => {
+    const late = lateAnswer();
+    const { api, sent } = apiAnswering(late.answer, () => Response.json(applied));
     const { queryClient, observer } = careFor(api);
-    onHomeRead(queryClient, () => {
-      observer.reset();
+    const tap = observer.mutate(careTap("feed")).catch((error: unknown) => error);
+    await vi.waitFor(() => {
+      expect(sent).toHaveLength(1);
     });
 
-    await observer.mutate(careTap("play"));
-    expect(careOutcomeText(observer.getCurrentResult().data)).toBe(texts.care.rejections.too_tired);
+    // What the gate does when another person signs in: a retry would carry their token.
+    queryClient.getMutationCache().clear();
+    late.release(problem(503, "database_unavailable")());
 
-    await queryClient.query(homeQuery(api));
-    expect(careOutcomeText(observer.getCurrentResult().data)).toBeNull();
-  });
-
-  it("goes when the person taps another action", async () => {
-    const late = lateAnswer();
-    const { api } = apiAnswering(() => Response.json(tooTired), late.answer);
-    const { observer } = careFor(api);
-    await observer.mutate(careTap("play"));
-
-    const next = observer.mutate(careTap("pet"));
-
-    expect(careOutcomeText(observer.getCurrentResult().data)).toBeNull();
-    late.release(Response.json(applied));
-    await next;
+    expect(await tap).toBeInstanceOf(Error);
+    expect(sent).toHaveLength(1);
   });
 });
 
@@ -379,21 +346,17 @@ describe("careTaps", () => {
     });
   });
 
-  it("still clears a refusal's text when Casa is read with no tap in flight", async () => {
-    const { api } = apiAnswering(
-      () => Response.json(tooTired),
-      () => Response.json({ pet: BRU }),
-    );
-    const { queryClient, observer, taps, onOutcome } = tapsFor(api);
+  it("clears a failed tap's text when Casa is read again with no tap in flight", async () => {
+    const { api } = apiAnswering(problem(422, "invalid_item"), () => Response.json({ pet: BRU }));
+    const { queryClient, observer, taps } = tapsFor(api);
     onHomeRead(queryClient, taps.homeRead);
 
-    taps.tap("play");
+    taps.tap("feed");
     await vi.waitFor(() => {
-      expect(onOutcome).toHaveBeenCalledTimes(1);
+      expect(careFailureText(observer.getCurrentResult().error)).toBe(texts.failure);
     });
-    expect(careOutcomeText(observer.getCurrentResult().data)).toBe(texts.care.rejections.too_tired);
 
     await queryClient.query(homeQuery(api));
-    expect(careOutcomeText(observer.getCurrentResult().data)).toBeNull();
+    expect(careFailureText(observer.getCurrentResult().error)).toBeNull();
   });
 });

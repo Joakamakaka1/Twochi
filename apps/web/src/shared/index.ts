@@ -11,6 +11,8 @@ export {
   createApi,
   createSignedFetch,
   isAuthFailure,
+  isStillWanted,
+  LeftBehindError,
   retryApiRead,
   retryApiWrite,
   useApi,
@@ -37,3 +39,4 @@ export type {
 export { ACTIVITIES, FOODS } from "./ui";
 export { AFFINITY_FACES } from "./ui";
 export { devTexts, ITEM_ICONS, texts } from "./ui";
+export { phrases } from "./ui";

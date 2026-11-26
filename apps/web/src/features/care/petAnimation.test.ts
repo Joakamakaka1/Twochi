@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { CareAction, Mood, Rejection } from "../../shared";
+import type { Affinity, CareAction, CareActionResult, Mood, Pet, Rejection } from "../../shared";
 import {
   changeRest,
   openStage,
@@ -29,28 +29,64 @@ describe("restAnimation", () => {
 });
 
 describe("reactionAnimation", () => {
+  const AWAKE = { asleep: false } as Pet;
+  const ASLEEP = { asleep: true } as Pet;
+  const result = (overrides: Partial<CareActionResult>): CareActionResult => ({
+    applied: true,
+    rejection: null,
+    deltas: {},
+    reaction: null,
+    sickness: null,
+    pet: AWAKE,
+    ...overrides,
+  });
+
   it.each([
-    ["feed", "eat"],
-    ["play", "happy"],
     ["pet", "happy"],
     ["bathe", "surprised"],
     ["sleep", "sleep"],
     ["wake", "surprised"],
   ] as const)("reacts to %s applied with %s", (action, animation) => {
-    expect(reactionAnimation(action, { applied: true, rejection: null })).toBe(animation);
+    expect(reactionAnimation(action, result({}))).toBe(animation);
   });
 
   it.each([
-    ["not_caretaker", "angry"],
-    ["asleep", "angry"],
-    ["already_asleep", "angry"],
-    ["already_awake", "angry"],
-    ["too_tired", "sad"],
-  ] as const)("reacts to a refusal for %s with %s", (rejection: Rejection, animation) => {
-    const actions: readonly CareAction[] = ["feed", "play", "pet", "bathe", "sleep", "wake"];
-    for (const action of actions) {
-      expect(reactionAnimation(action, { applied: false, rejection })).toBe(animation);
-    }
+    [2, "happy"],
+    [1, "happy"],
+    [0, "eat"],
+    [-1, "eat"],
+    [-2, "angry"],
+  ] as const)("reacts to a food or an activity with affinity %s with %s", (affinity: Affinity, animation) => {
+    expect(reactionAnimation("feed", result({ reaction: { item_key: "pizza", affinity } }))).toBe(animation);
+    expect(reactionAnimation("play", result({ reaction: { item_key: "dance", affinity } }))).toBe(animation);
+  });
+
+  it.each(["not_caretaker", "asleep", "already_asleep", "already_awake", "too_tired"] as const)(
+    "reacts to a refusal for %s with angry while awake, and sleep while asleep",
+    (rejection: Rejection) => {
+      const actions: readonly CareAction[] = ["feed", "play", "pet", "bathe", "sleep", "wake"];
+      for (const action of actions) {
+        expect(reactionAnimation(action, result({ applied: false, rejection }))).toBe("angry");
+        expect(reactionAnimation(action, result({ applied: false, rejection, pet: ASLEEP }))).toBe("sleep");
+      }
+    },
+  );
+
+  it("celebrates healing with happy, whatever it was given", () => {
+    const healedWithDisgust = result({ reaction: { item_key: "broccoli", affinity: -2 }, sickness: "healed" });
+
+    expect(reactionAnimation("feed", healedWithDisgust)).toBe("happy");
+    expect(reactionAnimation("bathe", result({ sickness: "healed" }))).toBe("happy");
+  });
+
+  it("reacts to what it was given even when that leaves it sick", () => {
+    const sickAfterAFavourite = result({ reaction: { item_key: "ball", affinity: 2 }, sickness: "fell_sick" });
+
+    expect(reactionAnimation("play", sickAfterAFavourite)).toBe("happy");
+  });
+
+  it("looks sad when an action without an item leaves it sick", () => {
+    expect(reactionAnimation("pet", result({ sickness: "fell_sick" }))).toBe("sad");
   });
 });
 

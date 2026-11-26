@@ -1,7 +1,7 @@
 import { hashKey, mutationOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { apiError, isAuthFailure, retryApiWrite, texts } from "../../shared";
+import { apiError, isAuthFailure, isStillWanted, LeftBehindError, retryApiWrite, texts } from "../../shared";
 import type { ApiClient, CareAction, CareActionResult, Home, ItemKey, Pet } from "../../shared";
 import { HOME_KEY, homeAfterCare } from "./home";
 
@@ -36,10 +36,17 @@ function currentHome(queryClient: QueryClient) {
   return queryClient.getQueryCache().find<Home>({ queryKey: HOME_KEY, exact: true });
 }
 
-// The mutation keeps the tap as its variables, so each retry sends the same key.
+const CARE_ACTION_KEY = ["care-action"] as const;
+
+// The mutation keeps the tap as its variables, so each retry sends the same key. Each
+// attempt first checks the tap is still in the mutation cache.
 export function careActionMutation(api: ApiClient, petId: Pet["id"], queryClient: QueryClient) {
   return mutationOptions({
-    mutationFn: (tap: CareTap) => sendCareAction(api, petId, tap),
+    mutationKey: CARE_ACTION_KEY,
+    mutationFn: (tap: CareTap) => {
+      if (!isStillWanted(queryClient, CARE_ACTION_KEY, tap)) return Promise.reject(new LeftBehindError());
+      return sendCareAction(api, petId, tap);
+    },
     retry: retryApiWrite,
     onMutate: async () => {
       // A read of Casa in flight would answer with the pet before this action.
@@ -100,22 +107,13 @@ export function careTaps(mutation: CareMutation, onOutcome: (action: CareAction,
     retry: () => {
       if (!inFlight && last !== undefined) send(last);
     },
-    // The reset clears a refusal's text, which is about the pet before this read. A tap
-    // in flight has no text yet, and resetting would detach it: its reaction and the end
-    // of the lock would never arrive.
+    // The reset clears a failed tap's text, which is about the pet before this read. A
+    // tap in flight has no text yet, and resetting would detach it: its reaction and the
+    // end of the lock would never arrive.
     homeRead: () => {
       if (!inFlight) mutation.reset();
     },
   };
-}
-
-/** What Casa says after a tap: why the engine refused it, how the pet took what it was given, or nothing. */
-export function careOutcomeText(result: CareActionResult | undefined): string | null {
-  if (result === undefined) return null;
-  if (result.rejection !== null) return texts.care.rejections[result.rejection];
-  if (result.reaction === null) return null;
-  const { item_key, affinity } = result.reaction;
-  return texts.care.reactionTo(texts.care.items[item_key], texts.care.reactions[affinity]);
 }
 
 /** What Casa says when a tap failed: nothing after an auth failure, as the gate takes over. */
@@ -125,7 +123,7 @@ export function careFailureText(error: unknown): string | null {
 
 /**
  * Calls `read` each time Casa is read again from the API, not when a care response
- * writes it; returns how to stop. A refusal's text is about the pet before that read.
+ * writes it; returns how to stop. A failed tap's text is about the pet before that read.
  */
 export function onHomeRead(queryClient: QueryClient, read: () => void): () => void {
   const homeHash = hashKey(HOME_KEY);

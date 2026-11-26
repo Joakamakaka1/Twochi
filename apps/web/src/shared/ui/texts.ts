@@ -80,27 +80,10 @@ export const texts = {
     },
     trays: { feed: "¿Qué le das de comer?", play: "¿A qué jugáis?" },
     closeTray: "Cerrar",
-    // How the pet took what it was given, by its affinity (GLOSSARY.md, «Afinidad»).
-    reactions: {
-      "2": "¡le encanta!",
-      "1": "le gusta.",
-      "0": "ni fu ni fa.",
-      "-1": "no le gusta mucho.",
-      "-2": "¡puaj, qué asco! Pero se lo toma.",
-    },
-    reactionTo: (item: string, reaction: string) => `${item}: ${reaction}`,
     // On an item in its tray, the reaction seen the last time it was given
     // (GLOSSARY.md, «Gusto descubierto»): its face, and this for screen readers.
     seen: { "2": "le encanta", "1": "le gusta", "0": "le da igual", "-1": "no le gusta", "-2": "le da asco" },
     seenItem: (item: string, seen: string) => `${item}, ${seen}`,
-    // Why the engine refused a care action (GLOSSARY.md, «Rechazo»).
-    rejections: {
-      not_caretaker: "Esta mascota la cuida tu pareja.",
-      asleep: "Está dormida. Despiértala antes.",
-      already_asleep: "Ya está dormida.",
-      already_awake: "Ya está despierta.",
-      too_tired: "Está demasiado cansada para jugar.",
-    },
   },
 } as const;
 

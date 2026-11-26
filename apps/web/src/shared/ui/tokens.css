@@ -43,6 +43,8 @@
   --color-alert: #a8324a;
   --color-alert-soft: #ffe3ea;
   --color-focus: #6b4cc9;
+  /* The pet's skin while sick: a pale green, read by the 3D scene. */
+  --color-pet-sick: #c4d6a0;
 
   /* Type: one rounded family, a 1.25 scale from a 17px body. */
   --font-body: "Nunito", ui-rounded, "Segoe UI", system-ui, sans-serif;
