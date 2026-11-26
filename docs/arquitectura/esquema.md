@@ -10,7 +10,7 @@ Postgres guarda todo en un esquema privado con `couple_id` en cada fila. La memo
 Doce reglas que evitan rehacer el esquema más adelante.
 - Esquema `app`, no expuesto. El front no lee ni escribe tablas por la Data API; pasa por tu API. Desde 2026 las tablas nuevas de `public` ya no se exponen solas y requieren `grant` explícito ([Supabase](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)).
 - `couple_id` en casi todas las filas, aunque sea redundante. Las políticas RLS quedan en una línea y los índices son simples.
-- Solo el motor escribe estado de juego. El cliente no escribe nada: `authenticated` tiene `insert` y `update` solo en las columnas que escribe el motor, y como `app` no está expuesto, solo los alcanza la API ([ADR 0009](../adr/0009-engine-writes-as-authenticated.md)).
+- Solo el motor escribe estado de juego. El cliente no escribe nada: `authenticated` tiene `insert` y `update` solo en las columnas que escribe el motor y en los gustos de `item_affinities`, que solo escribe la persona representada ([ADR 0015](../adr/0015-tastes-hidden-by-the-api-not-by-rls.md)), y como `app` no está expuesto, solo los alcanza la API ([ADR 0009](../adr/0009-engine-writes-as-authenticated.md)).
 - Estado más eventos. `pet_needs` guarda el estado actual; `pet_events` es el registro inmutable del que salen diario, rachas, álbum y tiempo real.
 - Idempotencia por clave única: `client_message_id` en mensajes, `idempotency_key` en eventos, `dedupe_key` en avisos. Reintentar nunca duplica. La clave se reserva antes de llamar al modelo: el mensaje del usuario se inserta como pendiente en la primera transacción, y un duplicado en vuelo recibe un 409 o la respuesta ya guardada.
 - Concurrencia explícita. Los dos podéis actuar a la vez sobre la misma mascota: bloquea sus necesidades con `select … for update` dentro de la transacción de la acción.
@@ -37,7 +37,7 @@ Quince tablas bastan para jugar, chatear y recordar.
 | `profiles` | `user_id` (PK, a `auth.users`), `couple_id`, `display_name`, `quiet_hours_start`, `quiet_hours_end` | Una fila por persona, con sus horas de silencio |
 | `pets` | `id`, `couple_id`, `represents_user_id`, `caretaker_user_id`, `name`, `model_key`, `level`, `xp` | Una mascota por persona representada; la cuida la otra |
 | `pet_needs` | `pet_id`, `need`, `value` (0–100), `updated_at`; PK (`pet_id`, `need`) | Último valor y su fecha; el valor actual se calcula al leer |
-| `pet_events` | `id`, `couple_id`, `pet_id`, `actor_user_id`, `source` (ui, chat, system), `action`, `payload`, `deltas`, `rules_version`, `idempotency_key` único, `created_at` | Registro inmutable de todo lo que ocurre |
+| `pet_events` | `id`, `couple_id`, `pet_id`, `actor_user_id`, `source` (ui, chat, system), `action`, `payload`, `deltas`, `rules_version`, `idempotency_key` único, `created_at` | Registro inmutable de todo lo que ocurre. En comer y jugar, `payload` guarda el objeto (`item_key`) y la afinidad vista (`affinity`); en cualquier acción que ponga enferma o cure a la mascota, `sickness` (`fell_sick` o `healed`) |
 | `persona_traits` | `id`, `couple_id`, `pet_id`, `author_user_id`, `perspective` (self, partner), `category`, `content`, `is_active` | Rasgos atómicos, cada uno con su autor |
 | `style_samples` | `id`, `pet_id`, `author_user_id`, `content`, `is_active` | Mensajes reales como ejemplo de voz |
 | `persona_versions` | `id`, `pet_id`, `version`, `rendered`, `content_hash`, `token_count` | Ficha renderizada e inmutable; cada mensaje apunta a la suya |
@@ -64,7 +64,7 @@ Once tablas más; ninguna obliga a cambiar las del núcleo.
 | `errands` | `id`, `couple_id`, `from_user_id`, `to_user_id`, `via_pet_id`, `original_text`, `delivered_text`, `status`, `delivered_at` | Recados: texto original y versión con la voz de la mascota |
 | `coin_ledger` | `id`, `couple_id`, `user_id`, `delta`, `reason`, `ref_type`, `ref_id`, `created_at` | Libro de movimientos; el saldo es la suma, nunca un campo que se edita |
 | `inventory` | `couple_id`, `user_id`, `item_key`, `qty` | Lo comprado y aún no consumido |
-| `item_affinities` | `pet_id`, `item_key`, `affinity` (−2 a 2) | Los gustos reales aplicados al catálogo |
+| `item_affinities` | `couple_id`, `pet_id`, `item_key`, `affinity` (−2 a 2, `smallint` con `check`), `updated_at`, `created_at`; PK (`pet_id`, `item_key`) | Los gustos reales aplicados al catálogo. `item_key` es `text` sin `check` contra el catálogo, que vive en el motor: una clave que ya no está se ignora al leer. Lo no puntuado vale 0 y no tiene fila. La leen las dos personas de la pareja; solo la persona representada inserta y actualiza, y nadie borra. Quien cuida no ve la lista: la oculta la API ([ADR 0015](../adr/0015-tastes-hidden-by-the-api-not-by-rls.md)) |
 | `couple_streaks` | `couple_id`, `current`, `best`, `last_day` | Caché derivada de `pet_events`; siempre se puede recalcular |
 | `achievements` | `couple_id`, `user_id`, `key`, `unlocked_at` | Logros desbloqueados |
 | `quiz_attempts` | `id`, `couple_id`, `pet_id`, `trait_id`, `asked_user_id`, `answer`, `is_correct` | El quiz pregunta sobre rasgos reales del perfil |
